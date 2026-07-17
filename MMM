@@ -1,0 +1,218 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local running = false
+local runningQC = false   -- ★ QC専用高速持ち替え
+local guiName = "\238\128\140\238\128\141\238\128\142"
+local lp = Players.LocalPlayer
+
+-- GUI削除
+for _,v in pairs(CoreGui:GetChildren()) do
+    if v.Name == guiName then
+        v:Destroy()
+    end
+end
+
+-- GUI作成
+local gui = Instance.new("ScreenGui", CoreGui)
+gui.Name = guiName
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+
+local frame = Instance.new("Frame", gui)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.BackgroundTransparency = 0.4
+frame.Position = UDim2.new(0, 200, 0, 60)
+frame.Size = UDim2.new(0,450,0,45)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
+local stroke = Instance.new("UIStroke", frame)
+stroke.Color = Color3.fromRGB(60,60,60)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.5
+
+local title = Instance.new("TextLabel", frame)
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0,10,0,0)
+title.Size = UDim2.new(0,150,0,20)
+title.Font = Enum.Font.SourceSansBold
+title.Text = guiName .. guiName
+title.TextColor3 = Color3.new(1,1,1)
+title.TextSize = 15
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local toggle = Instance.new("TextButton", frame)
+toggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+toggle.Position = UDim2.new(0,10,0,20)
+toggle.Size = UDim2.new(0,120,0,25)
+toggle.Font = Enum.Font.SourceSansBold
+toggle.Text = guiName
+toggle.TextColor3 = Color3.new(1,1,1)
+toggle.TextSize = 15
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0,8)
+
+local kill = Instance.new("TextButton", frame)
+kill.BackgroundColor3 = Color3.fromRGB(40,40,40)
+kill.Position = UDim2.new(0,140,0,20)
+kill.Size = UDim2.new(0,120,0,25)
+kill.Font = Enum.Font.SourceSansBold
+kill.Text = guiName
+kill.TextColor3 = Color3.new(1,1,1)
+kill.TextSize = 15
+Instance.new("UICorner", kill).CornerRadius = UDim.new(0,8)
+
+-- 攻撃禁止アイテム
+local noAttackItems = {
+    ["Rainbowrath Sword"] = true,
+    ["Gummy Bear"] = true,
+    ["Bat"] = true
+}
+
+local triggerQC = false
+
+-- QC専用：2秒だけ高速持ち替え
+local function QC_TwoSecondSwap()
+    runningQC = true
+    task.wait(2)
+    runningQC = false
+end
+
+-- アクセ削除ループ
+task.spawn(function()
+    while task.wait(1) do
+        for _,plr in pairs(Players:GetPlayers()) do
+            local char = plr.Character
+            if char then
+                for _,child in pairs(char:GetChildren()) do
+                    if child:IsA("Accessory") then
+                        child:Destroy()
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- 通常高速持ち替え（QCは含めない）
+task.spawn(function()
+    while task.wait() do
+        if running then
+            local char = lp.Character
+            local backpack = lp:FindFirstChild("Backpack")
+
+            if char and backpack then
+                for _,itemName in pairs({"Bat","Rainbowrath Sword","Gummy Bear"}) do
+                    local tool = backpack:FindFirstChild(itemName) or char:FindFirstChild(itemName)
+                    if tool and tool:IsA("Tool") then
+                        local state = 0
+                        while true do
+                            if state == 1 then
+                                task.wait(0.01)
+                                if tool.Parent == char then
+                                    tool.Parent = backpack
+                                end
+                                break
+                            end
+
+                            if state == 0 then
+                                tool.Parent = char
+
+                                if not noAttackItems[itemName] then
+                                    tool:Activate()
+                                end
+
+                                state = 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- QC専用高速持ち替え（QCだけ攻撃）
+task.spawn(function()
+    while task.wait() do
+        if runningQC then
+            local char = lp.Character
+            local backpack = lp:FindFirstChild("Backpack")
+
+            if char and backpack then
+                local qc = backpack:FindFirstChild("Quantum Cloner") or char:FindFirstChild("Quantum Cloner")
+                if qc and qc:IsA("Tool") then
+
+                    qc.Parent = char
+                    task.wait(0.05)
+
+                    -- ★ Quantum Cloner を攻撃させる（自動攻撃）
+                    qc:Activate()
+
+                    task.wait(0.05)
+                    qc.Parent = backpack
+
+                end
+            end
+        end
+    end
+end)
+
+-- Giant Potion → QC → QC専用高速持ち替え
+task.spawn(function()
+    while task.wait() do
+        if triggerQC then
+            triggerQC = false
+
+            task.delay(0.5, function()
+                local char = lp.Character
+                local backpack = lp:FindFirstChild("Backpack")
+                if not (char and backpack) then return end
+
+                local qc = backpack:FindFirstChild("Quantum Cloner") or char:FindFirstChild("Quantum Cloner")
+                if qc and qc:IsA("Tool") then
+
+                    qc.Parent = char
+                    task.wait(0.1)
+
+                    -- ★ QC を攻撃させる
+                    qc:Activate()
+
+                    task.wait(0.1)
+                    qc.Parent = backpack
+
+                    -- ★ QC専用高速持ち替えを2秒だけ起動
+                    QC_TwoSecondSwap()
+                end
+            end)
+        end
+    end
+end)
+
+-- ON/OFFボタン（ON にした瞬間 Giant Potion を1回だけ使用）
+toggle.MouseButton1Click:Connect(function()
+    local wasRunning = running
+    running = not running
+
+    toggle.BackgroundColor3 = running and Color3.new(0,1,0) or Color3.fromRGB(40,40,40)
+    toggle.TextColor3 = running and Color3.new(0,0,0) or Color3.new(1,1,1)
+
+    if (not wasRunning) and running then
+        local char = lp.Character
+        local backpack = lp:FindFirstChild("Backpack")
+
+        if char and backpack then
+            local gp = backpack:FindFirstChild("Giant Potion") or char:FindFirstChild("Giant Potion")
+            if gp and gp:IsA("Tool") then
+                gp.Parent = char
+                gp:Activate()
+                gp.Parent = backpack
+
+                triggerQC = true
+            end
+        end
+    end
+end)
+
+-- HPボタン
+kill.MouseButton1Click:Connect(function()
+    local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = 0 end
+end)
