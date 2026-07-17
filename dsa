@@ -1,0 +1,107 @@
+local v0,v1,v2,v3=game:GetService("Players"),game:GetService("CoreGui"),false,"\238\128\140\238\128\141\238\128\142";
+local v4=v0.LocalPlayer;
+
+-- GUI削除
+for v75,v76 in pairs(v1:GetChildren()) do
+    if (v76.Name==v3) then v76:Destroy(); end
+end
+
+-- GUI作成
+local v5=Instance.new("ScreenGui",v1);
+v5.Name,v5.ResetOnSpawn,v5.IgnoreGuiInset=v3,false,true;
+
+local v9=Instance.new("Frame",v5);
+v9.Name,v9.BackgroundColor3,v9.BackgroundTransparency,v9.Position,v9.Size=
+    v3,Color3.fromRGB(20,20,20),0.4,UDim2.new(0,-225,0,60),UDim2.new(0,450,0,45);
+Instance.new("UICorner",v9).CornerRadius=UDim.new(0,10);
+
+local v16=Instance.new("UIStroke",v9);
+v16.Color,v16.Thickness,v16.Transparency=Color3.fromRGB(60,60,60),1.5,0.5;
+
+local v20=Instance.new("TextLabel",v9);
+v20.BackgroundTransparency,v20.Position,v20.Size,v20.Font,v20.Text,v20.TextColor3,v20.TextSize,v20.TextXAlignment=
+    1,UDim2.new(0,10,0,0),UDim2.new(0,150,0,20),Enum.Font.SourceSansBold,v3..v3,Color3.new(1,1,1),15,0;
+
+local v54=Instance.new("TextButton",v9);
+v54.BackgroundColor3,v54.Position,v54.Size,v54.Font,v54.Text,v54.TextColor3,v54.TextSize=
+    Color3.fromRGB(40,40,40),UDim2.new(0,10,0,20),UDim2.new(0,120,0,25),Enum.Font.SourceSansBold,v3,Color3.new(1,1,1),15;
+Instance.new("UICorner",v54).CornerRadius=UDim.new(0,8);
+
+local v63=Instance.new("TextButton",v9);
+v63.BackgroundColor3,v63.Position,v63.Size,v63.Font,v63.Text,v63.TextColor3,v63.TextSize=
+    Color3.fromRGB(40,40,40),UDim2.new(0,140,0,20),UDim2.new(0,120,0,25),Enum.Font.SourceSansBold,v3,Color3.new(1,1,1),15;
+Instance.new("UICorner",v63).CornerRadius=UDim.new(0,8);
+
+-- ★ 攻撃禁止アイテムリスト
+local noAttackItems = {
+    ["Bat"] = true,
+    ["Rainbowrath Sword"] = true
+}
+
+-- アクセ削除ループ
+task.spawn(function()
+    while task.wait(1) do
+        for _,plr in pairs(v0:GetPlayers()) do
+            local char = plr.Character
+            if char then
+                for _,child in pairs(char:GetChildren()) do
+                    if child:IsA("Accessory") then
+                        child:Destroy()
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- メイン高速出し入れ＋攻撃ループ
+task.spawn(function()
+    while task.wait() do
+        if v2 then
+            local char = v4.Character
+            local backpack = v4:FindFirstChild("Backpack")
+
+            if char and backpack then
+                for _,itemName in pairs({"Bat","Rainbowrath Sword","Giant Potion"}) do
+                    local tool = backpack:FindFirstChild(itemName) or char:FindFirstChild(itemName)
+                    if tool and tool:IsA("Tool") then
+                        local state = 0
+                        while true do
+                            if state == 1 then
+                                task.wait(0.001)
+                                if tool.Parent == char then
+                                    tool.Parent = backpack
+                                end
+                                break
+                            end
+
+                            if state == 0 then
+                                tool.Parent = char
+
+                                -- ★ 攻撃禁止アイテムなら Activate() をスキップ
+                                if not noAttackItems[itemName] then
+                                    tool:Activate()
+                                end
+
+                                state = 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ON/OFFボタン
+v54.MouseButton1Click:Connect(function()
+    v2 = not v2
+    v54.BackgroundColor3 = v2 and Color3.new(0,1,0) or Color3.fromRGB(40,40,40)
+    v54.TextColor3 = v2 and Color3.new(0,0,0) or Color3.new(1,1,1)
+end)
+
+-- HPボタン
+v63.MouseButton1Click:Connect(function()
+    local hum = v4.Character and v4.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = 0 end
+end)
