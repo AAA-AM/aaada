@@ -1,0 +1,98 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local lp = Players.LocalPlayer
+
+local running = false
+local runningGP = false  -- ★ Giant Potion専用高速持ち替え
+
+local guiName = "\238\128\140\238\128\141\238\128\142"
+
+-- GUI削除
+for _,v in pairs(CoreGui:GetChildren()) do
+    if v.Name == guiName then
+        v:Destroy()
+    end
+end
+
+-- GUI作成
+local gui = Instance.new("ScreenGui", CoreGui)
+gui.Name = guiName
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+
+local frame = Instance.new("Frame", gui)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.BackgroundTransparency = 0.4
+frame.Position = UDim2.new(0, 200, 0, 60)
+frame.Size = UDim2.new(0,450,0,45)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,10)
+
+local toggle = Instance.new("TextButton", frame)
+toggle.BackgroundColor3 = Color3.fromRGB(40,40,40)
+toggle.Position = UDim2.new(0,10,0,20)
+toggle.Size = UDim2.new(0,120,0,25)
+toggle.Font = Enum.Font.SourceSansBold
+toggle.Text = guiName
+toggle.TextColor3 = Color3.new(1,1,1)
+toggle.TextSize = 15
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0,8)
+
+-- ★ Giant Potion専用：3秒高速持ち替え
+local function GP_ThreeSecondSwap()
+    runningGP = true
+    task.wait(3)
+    runningGP = false
+end
+
+-- ★ Giant Potion高速持ち替えループ（自動攻撃付き）
+task.spawn(function()
+    while task.wait() do
+        if runningGP then
+            local char = lp.Character
+            local backpack = lp:FindFirstChild("Backpack")
+            if not (char and backpack) then continue end
+
+            local gp = backpack:FindFirstChild("Giant Potion") or char:FindFirstChild("Giant Potion")
+            if gp and gp:IsA("Tool") then
+
+                gp.Parent = char
+                task.wait(0.005)
+
+                -- ★ Giant Potion 自動攻撃
+                gp:Activate()
+
+                task.wait(0.005)
+                gp.Parent = backpack
+            end
+        end
+    end
+end)
+
+-- ON/OFFボタン
+toggle.MouseButton1Click:Connect(function()
+    local wasRunning = running
+    running = not running
+
+    toggle.BackgroundColor3 = running and Color3.new(0,1,0) or Color3.fromRGB(40,40,40)
+    toggle.TextColor3 = running and Color3.new(0,0,0) or Color3.new(1,1,1)
+
+    if (not wasRunning) and running then
+        local char = lp.Character
+        local backpack = lp:FindFirstChild("Backpack")
+        if not (char and backpack) then return end
+
+        local gp = backpack:FindFirstChild("Giant Potion") or char:FindFirstChild("Giant Potion")
+        if gp and gp:IsA("Tool") then
+
+            -- ★ ONにした瞬間：Giant Potionを1回攻撃
+            gp.Parent = char
+            gp:Activate()
+            gp.Parent = backpack
+
+            -- ★ 4秒後に3秒高速切り替え開始
+            task.delay(4, function()
+                GP_ThreeSecondSwap()
+            end)
+        end
+    end
+end)
