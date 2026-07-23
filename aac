@@ -1,0 +1,432 @@
+{
+    "minFarm": "100m",
+    "autoJoinDuel": false,
+    "showPetSel": false,
+    "autoFinder": true,
+    "selectedPets": {
+        "OG": {
+            "Strawberry Elephant": true,
+            "Headless Horseman": true,
+            "Meowl": true,
+            "Skibidi Toilet": true
+        },
+        "Secret": {
+            "Celularcini Viciosini": true,
+            "La Taco Combinasion": false,
+            "Cerberus": true,
+            "La Secret Combinasion": true,
+            "Gold Gold Gold": false,
+            "Jolly Jolly Sahur": true,
+            "Los Bros": false,
+            "Fragrama and Chocrama": true,
+            "Foxini Lanternini": true,
+            "Elefanto Frigo": false,
+            "Granny": false,
+            "Ginger Gerat": true,
+            "Griffin": true,
+            "Sammyni Spyderini": false,
+            "Spooky and Pumpky": true,
+            "Los Amigos": true,
+            "Snailo Clovero": false,
+            "Tacorita Bicicleta": false,
+            "Hydra Dragon Cannelloni": true,
+            "Sammyni Fattini": true,
+            "Fortunu and Cashuru": true,
+            "Reinito Sleighito": true,
+            "Lovin Rose": false,
+            "Los Spaghettis": true,
+            "Las Sis": false,
+            "Signore Carapace": false,
+            "Noo my Eggs": false,
+            "Cooki and Milki": true,
+            "Festive 67": true,
+            "Nacho Spyder": false,
+            "Garama and Madundung": true,
+            "Dug dug dug": true,
+            "Los Primos": true,
+            "Dragon Gingerini": true,
+            "Love Love Bear": true,
+            "La Sahur Combinasion": false,
+            "Agarrini la Palini": false,
+            "Cloverat Clapat": true,
+            "La Food Combinasion": true,
+            "Rosey and Teddy": true,
+            "Swaggy Bros": false,
+            "Los Sekolahs": true,
+            "Celestial Pegasus": true,
+            "Capitano Moby": true,
+            "Ketupat Bros": true,
+            "Los Tacoritas": true,
+            "Fishino Clownino": true,
+            "Tirilikalika Tirilikalako": false,
+            "Popcuru and Fizzuru": true,
+            "W or L": false,
+            "Eviledon": false,
+            "La Supreme Combinasion": true,
+            "La Lucky Grande": false,
+            "Chillin Chili": false,
+            "Dragon Cannelloni": true,
+            "Orcaledon": true,
+            "La Casa Boo": true,
+            "Los Hotspotsitos": false,
+            "Tralaledon": true,
+            "Chipso and Queso": true,
+            "Burguro And Fryuro": true,
+            "Fragola La La La": false,
+            "Antonio": true,
+            "Guest 666": true
+        },
+        "Brainrot God": []
+    },
+    "autoJoinMaxInterval": 0,
+    "autoJoinMaxLogAge": 5,
+    "hideLockedBrainrots": true,
+    "keybinds": {
+        "toggleAutoJoin": "None",
+        "toggleUi": "T",
+        "joinTopServer": "F2"
+    },
+    "autoJoinDuration": 30,
+    "autoJoinMinInterval": 0,
+    "notifyTeleportFailed": true,
+    "showMain": true,
+    "petFilterEnabled": false,
+    "autoJoin": false,
+    "autoJoinMinFarm": "500m",
+
+    "windowPositions": {
+        "pets": {
+            "y_offset": 0,
+            "y_scale": 0.5,
+            "x_offset": 0,
+            "x_scale": 0.5
+        },
+        "main": {
+            "y_offset": 0,
+            "y_scale": 0.5,
+            "x_offset": 0,
+            "x_scale": 0.5
+        },
+        "filters": {
+            "y_offset": 0,
+            "y_scale": 0.5,
+            "x_offset": 0,
+            "x_scale": 0.5
+        }
+    },
+
+    "petCustomSettings": {
+        "Lovin Rose": {
+            "autoJoinMinFarm": "100m",
+            "mutationMinFarm": {
+                "Galaxy": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "YinYang": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "100m",
+                "Lava": "1",
+                "Cursed": "1",
+                "Diamond": "100m",
+                "Candy": "1"
+            }
+        },
+        "Ketchuru and Musturu": {
+            "mutationMinFarm": {
+                "Galaxy": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "YinYang": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "Cursed": "1",
+                "Candy": "1"
+            }
+        },
+        "Gold Gold Gold": {
+            "autoJoinMinFarm": "250m"
+        },
+        "La Romantic Grande": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Los Cupids": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Los Planitos": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Lavadorito Spinito": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Chillin Chili": {
+            "autoJoinMinFarm": "250m",
+            "mutationMinFarm": {
+                "Galaxy": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "YinYang": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "250m",
+                "Lava": "1",
+                "Cursed": "1",
+                "Diamond": "250m",
+                "Candy": "1"
+            }
+        },
+        "Los Bros": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "W or L": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "250m",
+                "Lava": "1",
+                "Diamond": "250m",
+                "YinYang": "1",
+                "Galaxy": "1"
+            },
+            "autoJoinMinFarm": "250m"
+        },
+        "Eviledon": {
+            "mutationMinFarm": {
+                "Radioactive": "1",
+                "Galaxy": "1",
+                "Bloodrot": "1",
+                "YinYang": "1",
+                "Lava": "1",
+                "Candy": "1",
+                "Rainbow": "1",
+                "Divine": "1"
+            }
+        },
+        "Money Money Reindeer": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "La Lucky Grande": {
+            "autoJoinMinFarm": "1b"
+        },
+        "La Extinct Grande": {
+            "autoJoinMinFarm": "250m",
+            "mutationMinFarm": {
+                "Diamond": "250m",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "YinYang": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "250m",
+                "Lava": "1",
+                "Cursed": "1",
+                "Galaxy": "1",
+                "Candy": "1"
+            }
+        },
+        "Tang Tang Keletang": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Las Sis": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Ketupat Kepat": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Swaggy Bros": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "250m",
+                "Lava": "1",
+                "Diamond": "250m",
+                "YinYang": "1",
+                "Galaxy": "1"
+            },
+            "autoJoinMinFarm": "250m"
+        },
+        "La Ginger Sekolah": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Tictac Sahur": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            }
+        },
+        "Tacorita Bicicleta": {
+            "autoJoinMinFarm": "250m",
+            "mutationMinFarm": {
+                "Galaxy": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "YinYang": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "250m",
+                "Lava": "1",
+                "Cursed": "1",
+                "Diamond": "250m",
+                "Candy": "1"
+            }
+        },
+        "Nacho Spyder": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            },
+            "autoJoinMinFarm": "1b"
+        },
+        "La Secret Combinasion": {
+            "mutationMinFarm": {
+                "Cursed": "1",
+                "Radioactive": "1",
+                "Rainbow": "1",
+                "Candy": "1",
+                "Divine": "1",
+                "Bloodrot": "1",
+                "Gold": "1",
+                "Lava": "1",
+                "Diamond": "1",
+                "YinYang": "1",
+                "Galaxy": "1"
+            },
+            "autoJoinMinFarm": "1"
+        },
+        "Lucky Block": {
+            "mutationMinFarm": {
+                "Galaxy": "1",
+                "Bloodrot": "1",
+                "Lava": "1",
+                "Candy": "1",
+                "Rainbow": "1",
+                "YinYang": "1"
+            }
+        }
+    },
+
+    "showFilter": true
+}
