@@ -1,0 +1,81 @@
+--========================================================--
+-- Odyssey Finder - UI Guaranteed Loader
+--========================================================--
+
+local HttpService = game:GetService("HttpService")
+
+--========================================================--
+-- 1. UIを必ず出す（設定読み込み前に生成）
+--========================================================--
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "OdysseyFinderUI"
+gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 450, 0, 320)
+main.Position = UDim2.new(0.5, -225, 0.5, -160) -- 画面中央
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+main.BorderSizePixel = 0
+main.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "Odyssey Finder"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Parent = main
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 30)
+status.Position = UDim2.new(0, 10, 0, 50)
+status.BackgroundTransparency = 1
+status.TextColor3 = Color3.fromRGB(200, 200, 200)
+status.TextScaled = true
+status.Text = "Loading config..."
+status.Parent = main
+
+--========================================================--
+-- 2. 設定ファイル読み込み（失敗しても UI は残る）
+--========================================================--
+
+local config
+local ok, err = pcall(function()
+    local raw = readfile("odyssey_finder_config.json")
+    config = HttpService:JSONDecode(raw)
+end)
+
+if not ok then
+    status.Text = "Config not found. Using default settings."
+    config = {
+        autoJoin = false,
+        autoFinder = true,
+        autoJoinMinFarm = "100m",
+        showMain = true
+    }
+else
+    status.Text = "Config loaded!"
+end
+
+--========================================================--
+-- 3. UIに設定内容を反映
+--========================================================--
+
+local function addLabel(text, y)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -20, 0, 30)
+    lbl.Position = UDim2.new(0, 10, 0, y)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    lbl.TextScaled = true
+    lbl.Text = text
+    lbl.Parent = main
+end
+
+addLabel("AutoJoin: " .. tostring(config.autoJoin), 90)
+addLabel("AutoFinder: " .. tostring(config.autoFinder), 130)
+addLabel("MinFarm: " .. tostring(config.autoJoinMinFarm), 170)
+addLabel("Pets Selected: " .. tostring(config.selectedPets and "Loaded"), 210)
+
+status.Text = "UI Ready!"
