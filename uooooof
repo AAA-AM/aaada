@@ -1,0 +1,1020 @@
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║           CARTI DUEL FINDER  |  Global Sync Edition         ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local Players       = game:GetService("Players")
+local CoreGui       = game:GetService("CoreGui")
+local TweenService  = game:GetService("TweenService")
+local HttpService   = game:GetService("HttpService")
+local UIS           = game:GetService("UserInputService")
+
+local LP            = Players.LocalPlayer
+local Plots         = workspace:WaitForChild("Plots")
+
+-- ══════════════════ GLOBAL SYNC (jsonblob.com) ══════════════════
+-- SETUP: go to https://jsonblob.com, paste {} into the box, hit Save,
+-- then copy the NUMBER from the URL (e.g. jsonblob.com/1099940584201240576)
+-- and paste it below as a string.
+
+local BLOB_ID  = "019de4e0-822e-702f-8467-8e4ec635f8a2"
+local BLOB_URL = "https://jsonblob.com/api/jsonBlob/" .. BLOB_ID
+
+-- debug log goes to F9 console AND the in-game status bar (set later)
+local dbgStatus = nil  -- assigned after GUI builds
+local function dbg(msg, isErr)
+    local prefix = isErr and "[CartiDuel ✗] " or "[CartiDuel] "
+    print(prefix .. msg)
+    if dbgStatus then
+        dbgStatus.Text      = msg
+        dbgStatus.TextColor3 = isErr and Color3.fromRGB(255,80,80) or Color3.fromRGB(65,195,255)
+    end
+end
+
+local function httpReq(url, method, body)
+    -- find whichever HTTP function the executor exposes
+    local fn = (syn and syn.request)
+            or (http_request and http_request)
+            or (request and request)
+            or (http and http.request)
+
+    if not fn then
+        dbg("NO HTTP FUNCTION — enable HTTP in executor settings!", true)
+        return nil, "no_http"
+    end
+
+    local opts = {
+        Url     = url,
+        Method  = method or "GET",
+        Headers = {
+            ["Content-Type"] = "application/json",
+            ["Accept"]       = "application/json",
+        },
+    }
+    if body then
+        local ok, encoded = pcall(HttpService.JSONEncode, HttpService, body)
+        if not ok then dbg("JSON encode failed: " .. tostring(encoded), true); return nil, "encode" end
+        opts.Body = encoded
+    end
+
+    local ok, res = pcall(fn, opts)
+    if not ok then
+        dbg("HTTP pcall error: " .. tostring(res), true)
+        return nil, "pcall"
+    end
+    if not res then
+        dbg("HTTP returned nil response", true)
+        return nil, "nil_res"
+    end
+
+    local code = res.StatusCode or res.StatusMessage or "?"
+    dbg(method .. " " .. url .. "  →  " .. tostring(code))
+
+    if res.Body and #res.Body > 0 then
+        return res.Body, code
+    end
+    return nil, code
+end
+
+local function fetchListings()
+    if BLOB_ID == "YOUR_BLOB_ID_HERE" then
+        dbg("BLOB_ID not set — open the script and fill in your jsonblob ID!", true)
+        return {}
+    end
+    local raw, code = httpReq(BLOB_URL, "GET")
+    if not raw then
+        dbg("Fetch failed (code=" .. tostring(code) .. ")", true)
+        return {}
+    end
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, raw)
+    if not ok or type(data) ~= "table" then
+        dbg("JSON decode failed — raw: " .. tostring(raw):sub(1,80), true)
+        return {}
+    end
+    dbg("Fetched " .. tostring(#(function(t) local n=0; for _ in pairs(t) do n=n+1 end; return n end)(data)) .. " listing(s)")
+    return data
+end
+
+local function pushListings(t)
+    if BLOB_ID == "YOUR_BLOB_ID_HERE" then return end
+    local _, code = httpReq(BLOB_URL, "PUT", t)
+    if tostring(code):sub(1,1) == "2" then
+        dbg("Push OK (code=" .. tostring(code) .. ")")
+    else
+        dbg("Push may have failed (code=" .. tostring(code) .. ")", true)
+    end
+end
+
+local function addListing(data)
+    dbg("Adding listing: " .. data.AnimalName)
+    local all = fetchListings()
+    all[data.AnimalName .. "_" .. data.User] = data
+    pushListings(all)
+end
+
+local function removeListing(animal, user)
+    dbg("Removing listing: " .. animal)
+    local all = fetchListings()
+    all[animal .. "_" .. user] = nil
+    pushListings(all)
+end
+
+-- ══════════════════ HELPERS ══════════════════
+
+local function findAnimator(m)
+    return m:FindFirstChildWhichIsA("Animator", true)
+end
+
+local function tw(obj, props, t, style, dir)
+    TweenService:Create(obj, TweenInfo.new(
+        t or 0.2,
+        style or Enum.EasingStyle.Quart,
+        dir   or Enum.EasingDirection.Out
+    ), props):Play()
+end
+
+local function corner(p, r)
+    local c = Instance.new("UICorner", p)
+    c.CornerRadius = UDim.new(0, r or 10)
+    return c
+end
+
+local function stroke(p, col, thick)
+    local s = Instance.new("UIStroke", p)
+    s.Color     = col or Color3.fromRGB(40,40,65)
+    s.Thickness = thick or 1
+    return s
+end
+
+local function mkLabel(parent, props)
+    local l = Instance.new("TextLabel", parent)
+    l.BackgroundTransparency = 1
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    for k, v in pairs(props) do l[k] = v end
+    return l
+end
+
+local function mkButton(parent, props)
+    local b = Instance.new("TextButton", parent)
+    b.BorderSizePixel  = 0
+    b.AutoButtonColor  = false
+    for k, v in pairs(props) do b[k] = v end
+    return b
+end
+
+-- ══════════════════ PALETTE ══════════════════
+
+local C = {
+    BG       = Color3.fromRGB(7,   7,  13),
+    PANEL    = Color3.fromRGB(12,  12,  22),
+    CARD     = Color3.fromRGB(16,  16,  28),
+    CARD_H   = Color3.fromRGB(22,  22,  38),
+    ACCENT   = Color3.fromRGB(105, 82, 255),
+    ACCENT2  = Color3.fromRGB(65, 195, 255),
+    GLOW     = Color3.fromRGB(130,100, 255),
+    SUCCESS  = Color3.fromRGB(55,  215, 125),
+    DANGER   = Color3.fromRGB(255,  75,  75),
+    WARN     = Color3.fromRGB(255, 185,  55),
+    TEXT     = Color3.fromRGB(228, 228, 255),
+    TSUB     = Color3.fromRGB(135, 135, 175),
+    TMUTE    = Color3.fromRGB(65,   65, 100),
+    BORDER   = Color3.fromRGB(38,   38,  62),
+}
+
+-- ══════════════════ SCALE ══════════════════
+
+local VP    = workspace.CurrentCamera.ViewportSize
+local scale = math.clamp(math.min(VP.X/1920, VP.Y/1080), 0.6, 1.15)
+local W     = math.floor(680 * scale)
+local H     = math.floor(655 * scale)
+
+-- ══════════════════ DESTROY OLD ══════════════════
+
+pcall(function()
+    if CoreGui:FindFirstChild("CartiDuelFinder") then
+        CoreGui:FindFirstChild("CartiDuelFinder"):Destroy()
+    end
+end)
+
+-- ══════════════════ ROOT ══════════════════
+
+local sg = Instance.new("ScreenGui", CoreGui)
+sg.Name           = "CartiDuelFinder"
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.IgnoreGuiInset = true
+sg.ResetOnSpawn   = false
+
+local win = Instance.new("Frame", sg)
+win.Name             = "Window"
+win.Size             = UDim2.new(0, W, 0, H)
+win.Position         = UDim2.new(0.5, -W/2, -0.25, 0)
+win.BackgroundColor3 = C.BG
+win.ClipsDescendants = true
+win.Active           = true
+corner(win, 18)
+stroke(win, C.BORDER, 1.5)
+
+-- ambient glow frame
+local aGlow = Instance.new("Frame", win)
+aGlow.Size                = UDim2.new(1,0,1,0)
+aGlow.BackgroundColor3    = C.ACCENT
+aGlow.BackgroundTransparency = 0.94
+aGlow.ZIndex              = 1
+corner(aGlow, 18)
+
+-- ── Particle background ──────────────────────
+
+local pBg = Instance.new("Frame", win)
+pBg.Size                    = UDim2.new(1,0,1,0)
+pBg.BackgroundTransparency  = 1
+pBg.ClipsDescendants        = true
+pBg.ZIndex                  = 1
+
+local PCOLS = { C.ACCENT, C.ACCENT2, Color3.fromRGB(180,70,255) }
+local particles = {}
+for i = 1, 55 do
+    local sz  = math.random(2,9)
+    local dot = Instance.new("Frame", pBg)
+    dot.Size                    = UDim2.new(0,sz,0,sz)
+    dot.Position                = UDim2.new(math.random(),0, math.random(),0)
+    dot.BackgroundColor3        = PCOLS[math.random(#PCOLS)]
+    dot.BackgroundTransparency  = 0.45 + math.random()*0.5
+    dot.BorderSizePixel         = 0
+    corner(dot, 999)
+    particles[i] = {
+        f  = dot,
+        vx = (math.random()-0.5)*0.006,
+        vy = (math.random()-0.5)*0.005,
+        td = math.random() > 0.5 and 1 or -1,
+        ts = 0.001 + math.random()*0.0015,
+    }
+end
+task.spawn(function()
+    while sg and sg.Parent do
+        for _, p in ipairs(particles) do
+            local f = p.f
+            local x = f.Position.X.Scale + p.vx
+            local y = f.Position.Y.Scale + p.vy
+            if x<0 then x=1 elseif x>1 then x=0 end
+            if y<0 then y=1 elseif y>1 then y=0 end
+            f.Position = UDim2.new(x,0,y,0)
+            local nt = f.BackgroundTransparency + p.ts*p.td
+            if nt>0.9 then nt=0.9; p.td=-1 elseif nt<0.3 then nt=0.3; p.td=1 end
+            f.BackgroundTransparency = nt
+        end
+        task.wait(0.04)
+    end
+end)
+
+-- ══════════════════ HEADER ══════════════════
+
+local HDR_H = math.floor(72 * scale)
+
+local header = Instance.new("Frame", win)
+header.Name              = "Header"
+header.Size              = UDim2.new(1,0,0,HDR_H)
+header.BackgroundColor3  = C.PANEL
+header.ZIndex            = 8
+corner(header, 18)
+
+-- flush bottom corners on header
+local hFlush = Instance.new("Frame", header)
+hFlush.Size             = UDim2.new(1,0,0.5,0)
+hFlush.Position         = UDim2.new(0,0,0.5,0)
+hFlush.BackgroundColor3 = C.PANEL
+hFlush.BorderSizePixel  = 0
+hFlush.ZIndex           = 7
+
+local hBorder = stroke(header, C.BORDER, 1)
+
+-- top accent line
+local accentLine = Instance.new("Frame", header)
+accentLine.Size              = UDim2.new(0.42,0,0,2)
+accentLine.Position          = UDim2.new(0.29,0,0,0)
+accentLine.BackgroundColor3  = C.ACCENT
+accentLine.BorderSizePixel   = 0
+accentLine.ZIndex            = 10
+corner(accentLine, 2)
+local accentGrad = Instance.new("UIGradient", accentLine)
+accentGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, C.ACCENT),
+    ColorSequenceKeypoint.new(1, C.ACCENT2),
+})
+accentGrad.Rotation = 0
+
+mkLabel(header, {
+    Size           = UDim2.new(1,0,0,28),
+    Position       = UDim2.new(0,0,0,8),
+    Text           = "⚔  CARTI DUEL FINDER",
+    TextColor3     = C.TEXT,
+    Font           = Enum.Font.GothamBlack,
+    TextSize       = math.floor(21*scale),
+    TextXAlignment = Enum.TextXAlignment.Center,
+    ZIndex         = 10,
+})
+
+mkLabel(header, {
+    Size           = UDim2.new(1,0,0,16),
+    Position       = UDim2.new(0,0,0,40),
+    Text           = "G L O B A L  ·  R E A L - T I M E  ·  T R A D I N G",
+    TextColor3     = C.ACCENT2,
+    Font           = Enum.Font.GothamBold,
+    TextSize       = math.floor(9*scale),
+    TextXAlignment = Enum.TextXAlignment.Center,
+    ZIndex         = 10,
+})
+
+-- window control buttons
+local function mkWinBtn(xOff, bgCol, lbl)
+    local b = mkButton(header, {
+        Size             = UDim2.new(0,28,0,28),
+        Position         = UDim2.new(1, xOff, 0.5,-14),
+        BackgroundColor3 = bgCol,
+        Text             = lbl,
+        TextColor3       = Color3.new(1,1,1),
+        Font             = Enum.Font.GothamBold,
+        TextSize         = 13,
+        ZIndex           = 11,
+    })
+    corner(b, 999)
+    b.MouseEnter:Connect(function() tw(b,{BackgroundColor3=bgCol:lerp(Color3.new(1,1,1),0.3)}) end)
+    b.MouseLeave:Connect(function() tw(b,{BackgroundColor3=bgCol}) end)
+    return b
+end
+
+local closeBtn = mkWinBtn(-10, C.DANGER, "✕")
+local minBtn   = mkWinBtn(-46, C.WARN,   "—")
+
+closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+local minimised = false
+minBtn.MouseButton1Click:Connect(function()
+    minimised = not minimised
+    local tgtH = minimised and UDim2.new(0,W,0,HDR_H) or UDim2.new(0,W,0,H)
+    tw(win, {Size=tgtH}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+end)
+
+-- ══════════════════ TAB BAR ══════════════════
+
+local TAB_Y = HDR_H + 10
+local TAB_H = 42
+
+local tabBar = Instance.new("Frame", win)
+tabBar.Size             = UDim2.new(1,-32,0,TAB_H)
+tabBar.Position         = UDim2.new(0,16,0,TAB_Y)
+tabBar.BackgroundColor3 = C.PANEL
+tabBar.ZIndex           = 8
+corner(tabBar, 11)
+stroke(tabBar, C.BORDER, 1)
+
+local tabLayout = Instance.new("UIListLayout", tabBar)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding       = UDim.new(0,4)
+tabLayout.SortOrder     = Enum.SortOrder.LayoutOrder
+
+local tabPad = Instance.new("UIPadding", tabBar)
+tabPad.PaddingTop    = UDim.new(0,5)
+tabPad.PaddingBottom = UDim.new(0,5)
+tabPad.PaddingLeft   = UDim.new(0,5)
+tabPad.PaddingRight  = UDim.new(0,5)
+
+local TABS = {
+    { name="SCAN",    icon="🔍", order=1 },
+    { name="GLOBAL",  icon="🌍", order=2 },
+    { name="MY ADS",  icon="📦", order=3 },
+    { name="OFFERS",  icon="💎", order=4 },
+}
+
+local tabBtns    = {}
+local activeTab  = nil
+
+for _, t in ipairs(TABS) do
+    local b = mkButton(tabBar, {
+        Size             = UDim2.new(0.25,-5,1,0),
+        BackgroundColor3 = Color3.fromRGB(18,18,30),
+        Text             = t.icon.."  "..t.name,
+        TextColor3       = C.TSUB,
+        Font             = Enum.Font.GothamBold,
+        TextSize         = math.floor(12*scale),
+        LayoutOrder      = t.order,
+        ZIndex           = 9,
+    })
+    corner(b, 8)
+    b.MouseEnter:Connect(function()
+        if activeTab ~= t.name then tw(b,{TextColor3=C.TEXT}) end
+    end)
+    b.MouseLeave:Connect(function()
+        if activeTab ~= t.name then tw(b,{TextColor3=C.TSUB}) end
+    end)
+    tabBtns[t.name] = b
+end
+
+local function setActiveTab(name)
+    for n, b in pairs(tabBtns) do
+        if n == name then
+            tw(b, { BackgroundColor3=C.ACCENT, TextColor3=Color3.new(1,1,1) })
+        else
+            tw(b, { BackgroundColor3=Color3.fromRGB(18,18,30), TextColor3=C.TSUB })
+        end
+    end
+    activeTab = name
+end
+
+-- ══════════════════ SEARCH BAR ══════════════════
+
+local SB_Y = TAB_Y + TAB_H + 8
+local SB_H = 36
+
+local sbFrame = Instance.new("Frame", win)
+sbFrame.Size             = UDim2.new(1,-32,0,SB_H)
+sbFrame.Position         = UDim2.new(0,16,0,SB_Y)
+sbFrame.BackgroundColor3 = C.PANEL
+sbFrame.ZIndex           = 8
+corner(sbFrame, 9)
+stroke(sbFrame, C.BORDER, 1)
+
+mkLabel(sbFrame, {
+    Size           = UDim2.new(0,32,1,0),
+    Position       = UDim2.new(0,2,0,0),
+    Text           = "🔍",
+    TextSize       = 13,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    ZIndex         = 9,
+})
+
+local searchBox = Instance.new("TextBox", sbFrame)
+searchBox.Size                   = UDim2.new(1,-36,1,0)
+searchBox.Position               = UDim2.new(0,32,0,0)
+searchBox.BackgroundTransparency = 1
+searchBox.PlaceholderText        = "Search animals..."
+searchBox.PlaceholderColor3      = C.TMUTE
+searchBox.TextColor3             = C.TEXT
+searchBox.Font                   = Enum.Font.Gotham
+searchBox.TextSize               = math.floor(13*scale)
+searchBox.ClearTextOnFocus       = false
+searchBox.ZIndex                 = 9
+
+local sbStroke = stroke(sbFrame, C.BORDER, 1)
+searchBox.Focused:Connect(function()
+    tw(sbFrame,{BackgroundColor3=Color3.fromRGB(18,18,34)})
+    sbStroke.Color = C.ACCENT
+    sbStroke.Thickness = 1.5
+end)
+searchBox.FocusLost:Connect(function()
+    tw(sbFrame,{BackgroundColor3=C.PANEL})
+    sbStroke.Color = C.BORDER
+    sbStroke.Thickness = 1
+end)
+
+-- ══════════════════ SCROLL CONTAINERS ══════════════════
+
+local SC_Y = SB_Y + SB_H + 8
+local SC_H = H - SC_Y - 66
+
+local containers = {}
+for _, t in ipairs(TABS) do
+    local f = Instance.new("ScrollingFrame", win)
+    f.Name                  = t.name
+    f.Size                  = UDim2.new(1,-32,0,SC_H)
+    f.Position              = UDim2.new(0,16,0,SC_Y)
+    f.BackgroundTransparency = 1
+    f.ScrollBarThickness    = 3
+    f.ScrollBarImageColor3  = C.ACCENT
+    f.CanvasSize            = UDim2.new(0,0,0,0)
+    f.ZIndex                = 8
+    f.Visible               = false
+    local layout = Instance.new("UIListLayout", f)
+    layout.Padding    = UDim.new(0,7)
+    layout.SortOrder  = Enum.SortOrder.LayoutOrder
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        f.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+10)
+    end)
+    containers[t.name] = f
+end
+containers["SCAN"].Visible = true
+
+local function clearContainer(c)
+    for _, ch in pairs(c:GetChildren()) do
+        if ch:IsA("Frame") then ch:Destroy() end
+    end
+end
+
+local function applySearch(cont, txt)
+    local low = txt and txt ~= "" and txt:lower() or nil
+    for _, ch in pairs(cont:GetChildren()) do
+        if ch:IsA("Frame") and ch.Name ~= "__empty" then
+            ch.Visible = not low or (ch.Name:lower():find(low,1,true) ~= nil)
+        end
+    end
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    for _, c in pairs(containers) do
+        if c.Visible then applySearch(c, searchBox.Text) end
+    end
+end)
+
+-- ══════════════════ EMPTY STATE ══════════════════
+
+local function emptyState(cont, msg)
+    for _, c in pairs(cont:GetChildren()) do
+        if c:IsA("Frame") and c.Name == "__empty" then c:Destroy() end
+    end
+    local e = Instance.new("Frame", cont)
+    e.Name                   = "__empty"
+    e.Size                   = UDim2.new(1,0,0,130)
+    e.BackgroundTransparency = 1
+    e.ZIndex                 = 9
+
+    mkLabel(e, {
+        Size           = UDim2.new(1,0,0,55),
+        Position       = UDim2.new(0,0,0,15),
+        Text           = "🌑",
+        TextSize       = 36,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        ZIndex         = 9,
+    })
+    mkLabel(e, {
+        Size           = UDim2.new(1,0,0,28),
+        Position       = UDim2.new(0,0,0,72),
+        Text           = msg or "Nothing here yet.",
+        Font           = Enum.Font.Gotham,
+        TextSize       = 13,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextColor3     = C.TMUTE,
+        ZIndex         = 9,
+    })
+end
+
+-- ══════════════════ TOAST ══════════════════
+
+local toastFrame = Instance.new("Frame", sg)
+toastFrame.Size               = UDim2.new(0,290,0,46)
+toastFrame.Position           = UDim2.new(0.5,-145,1,20)
+toastFrame.BackgroundColor3   = C.CARD
+toastFrame.ZIndex             = 999
+corner(toastFrame, 12)
+local toastStroke = stroke(toastFrame, C.ACCENT, 1.5)
+
+local toastIcon = mkLabel(toastFrame, {
+    Size           = UDim2.new(0,34,1,0),
+    Position       = UDim2.new(0,8,0,0),
+    Text           = "✓",
+    TextColor3     = C.SUCCESS,
+    Font           = Enum.Font.GothamBold,
+    TextSize       = 17,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    ZIndex         = 1000,
+})
+local toastMsg = mkLabel(toastFrame, {
+    Size           = UDim2.new(1,-48,1,0),
+    Position       = UDim2.new(0,44,0,0),
+    Text           = "",
+    TextColor3     = C.TEXT,
+    Font           = Enum.Font.GothamSemibold,
+    TextSize       = 12,
+    ZIndex         = 1000,
+})
+
+local toastBusy = false
+local function toast(msg, icon, col)
+    if toastBusy then return end
+    toastBusy = true
+    toastMsg.Text       = msg
+    toastIcon.Text      = icon or "✓"
+    toastIcon.TextColor3 = col or C.SUCCESS
+    toastStroke.Color   = col or C.SUCCESS
+    tw(toastFrame, { Position=UDim2.new(0.5,-145,1,-64) }, 0.38, Enum.EasingStyle.Back)
+    task.delay(2.4, function()
+        tw(toastFrame, { Position=UDim2.new(0.5,-145,1,20) }, 0.3)
+        task.wait(0.35)
+        toastBusy = false
+    end)
+end
+
+-- ══════════════════ STATUS BAR ══════════════════
+
+local statBar = Instance.new("Frame", win)
+statBar.Size             = UDim2.new(1,-32,0,44)
+statBar.Position         = UDim2.new(0,16,1,-56)
+statBar.BackgroundColor3 = C.PANEL
+statBar.ZIndex           = 8
+corner(statBar, 11)
+stroke(statBar, C.BORDER, 1)
+
+local statPad = Instance.new("UIPadding", statBar)
+statPad.PaddingLeft  = UDim.new(0,12)
+statPad.PaddingRight = UDim.new(0,12)
+
+local statDot = Instance.new("Frame", statBar)
+statDot.Size             = UDim2.new(0,7,0,7)
+statDot.Position         = UDim2.new(0,0,0.5,-3.5)
+statDot.BackgroundColor3 = C.SUCCESS
+statDot.BorderSizePixel  = 0
+statDot.ZIndex           = 9
+corner(statDot, 999)
+
+local statLbl = mkLabel(statBar, {
+    Size      = UDim2.new(0.55,0,1,0),
+    Position  = UDim2.new(0,16,0,0),
+    Text      = "Ready — scan plots to begin",
+    Font      = Enum.Font.Gotham,
+    TextSize  = 11,
+    TextColor3 = C.TSUB,
+    ZIndex    = 9,
+})
+
+-- debug line shown above status bar (HTTP diagnostics)
+local dbgBar = Instance.new("Frame", win)
+dbgBar.Size             = UDim2.new(1,-32,0,20)
+dbgBar.Position         = UDim2.new(0,16,1,-78)
+dbgBar.BackgroundTransparency = 1
+dbgBar.ZIndex           = 8
+
+dbgStatus = mkLabel(dbgBar, {
+    Size       = UDim2.new(1,0,1,0),
+    Text       = BLOB_ID == "YOUR_BLOB_ID_HERE" and "⚠ BLOB_ID not set — open script and fill in your jsonblob.com ID" or "HTTP ready",
+    Font       = Enum.Font.Gotham,
+    TextSize   = 10,
+    TextColor3 = BLOB_ID == "YOUR_BLOB_ID_HERE" and Color3.fromRGB(255,180,50) or C.TMUTE,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex     = 9,
+})
+
+local scanBtn = mkButton(statBar, {
+    Size             = UDim2.new(0,130,0,30),
+    Position         = UDim2.new(1,-130,0.5,-15),
+    BackgroundColor3 = C.ACCENT,
+    Text             = "⚡  SCAN PLOTS",
+    TextColor3       = Color3.new(1,1,1),
+    Font             = Enum.Font.GothamBold,
+    TextSize         = 11,
+    ZIndex           = 9,
+})
+corner(scanBtn, 9)
+scanBtn.MouseEnter:Connect(function() tw(scanBtn,{BackgroundColor3=C.GLOW}) end)
+scanBtn.MouseLeave:Connect(function() tw(scanBtn,{BackgroundColor3=C.ACCENT}) end)
+
+local function setStatus(msg, col, dotC)
+    statLbl.Text       = msg
+    statLbl.TextColor3 = col or C.TSUB
+    tw(statDot, { BackgroundColor3=dotC or C.SUCCESS })
+end
+
+-- ══════════════════ CARD ══════════════════
+
+local function createCard(parent, cfg)
+    local CARD_H = 96
+
+    local card = Instance.new("Frame", parent)
+    card.Name             = cfg.animalName or "card"
+    card.Size             = UDim2.new(1,0,0,CARD_H)
+    card.BackgroundColor3 = C.CARD
+    card.LayoutOrder      = cfg.order or 0
+    card.ZIndex           = 9
+    corner(card, 12)
+    stroke(card, C.BORDER, 1)
+
+    card.MouseEnter:Connect(function() tw(card,{BackgroundColor3=C.CARD_H}) end)
+    card.MouseLeave:Connect(function() tw(card,{BackgroundColor3=C.CARD}) end)
+
+    -- left stripe
+    local stripe = Instance.new("Frame", card)
+    stripe.Size             = UDim2.new(0,3,0.65,0)
+    stripe.Position         = UDim2.new(0,0,0.175,0)
+    stripe.BackgroundColor3 = cfg.isMine and C.SUCCESS or C.ACCENT
+    stripe.BorderSizePixel  = 0
+    stripe.ZIndex           = 10
+    corner(stripe, 3)
+
+    -- viewport
+    local vp = Instance.new("ViewportFrame", card)
+    vp.Size             = UDim2.new(0,78,0,78)
+    vp.Position         = UDim2.new(0,12,0.5,-39)
+    vp.BackgroundColor3 = Color3.fromRGB(5,5,14)
+    vp.ZIndex           = 10
+    corner(vp, 9)
+    stroke(vp, C.BORDER, 1)
+
+    task.spawn(function()
+        local wm  = Instance.new("WorldModel", vp)
+        local cam = Instance.new("Camera", vp)
+        vp.CurrentCamera = cam
+
+        local source = nil
+        for _, plot in pairs(Plots:GetChildren()) do
+            for _, obj in pairs(plot:GetDescendants()) do
+                if obj:IsA("Model") and obj.Name == cfg.animalName then
+                    source = obj; break
+                end
+            end
+            if source then break end
+        end
+
+        if source then
+            local clone = source:Clone()
+            clone.Parent = wm
+            local root = clone:FindFirstChild("RootPart") or clone.PrimaryPart
+                          or clone:FindFirstChildWhichIsA("BasePart",true)
+            if root then
+                cam.CFrame = CFrame.new(root.Position + Vector3.new(0,3,8), root.Position)
+                local a  = findAnimator(clone)
+                local sa = findAnimator(source)
+                if a and sa then
+                    pcall(function()
+                        for _, t in pairs(sa:GetPlayingAnimationTracks()) do
+                            local nt = a:LoadAnimation(t.Animation)
+                            nt.Looped=true; nt:Play()
+                            nt.TimePosition = t.TimePosition
+                        end
+                    end)
+                end
+            end
+        else
+            local p = Instance.new("Part", wm)
+            p.Size     = Vector3.new(3,3,3)
+            p.BrickColor = BrickColor.new("Bright violet")
+            p.Material   = Enum.Material.Neon
+            cam.CFrame = CFrame.new(Vector3.new(0,2,9), Vector3.new(0,1.5,0))
+        end
+    end)
+
+    -- name
+    mkLabel(card, {
+        Size      = UDim2.new(0.55,0,0,20),
+        Position  = UDim2.new(0,100,0,10),
+        Text      = (cfg.animalName or "?"):upper(),
+        Font      = Enum.Font.GothamBlack,
+        TextSize  = math.floor(14*scale),
+        TextColor3 = C.TEXT,
+        ZIndex    = 10,
+    })
+
+    -- owner badge
+    if cfg.ownerName then
+        local badge = Instance.new("Frame", card)
+        badge.Size              = UDim2.new(0,0,0,20)
+        badge.Position          = UDim2.new(0,100,0,34)
+        badge.BackgroundColor3  = cfg.isMine and Color3.fromRGB(15,40,25) or Color3.fromRGB(15,15,35)
+        badge.AutomaticSize     = Enum.AutomaticSize.X
+        badge.ZIndex            = 10
+        corner(badge, 6)
+
+        local badgeL = mkLabel(badge, {
+            Size          = UDim2.new(0,0,1,0),
+            AutomaticSize = Enum.AutomaticSize.X,
+            Text          = cfg.isMine and ("⭐ YOU — "..cfg.ownerName) or ("👤 "..cfg.ownerName),
+            Font          = Enum.Font.GothamSemibold,
+            TextSize      = 10,
+            TextColor3    = cfg.isMine and C.SUCCESS or C.TSUB,
+            ZIndex        = 11,
+        })
+        local badgePad = Instance.new("UIPadding", badge)
+        badgePad.PaddingLeft  = UDim.new(0,6)
+        badgePad.PaddingRight = UDim.new(0,6)
+    end
+
+    -- action button
+    local function mkActionBtn(x, xOff, w, text, bg)
+        local b = mkButton(card, {
+            Size             = UDim2.new(0,w,0,28),
+            Position         = UDim2.new(x, xOff, 1,-38),
+            BackgroundColor3 = bg,
+            Text             = text,
+            TextColor3       = Color3.new(1,1,1),
+            Font             = Enum.Font.GothamBold,
+            TextSize         = 11,
+            ZIndex           = 10,
+        })
+        corner(b, 8)
+        b.MouseEnter:Connect(function() tw(b,{BackgroundColor3=bg:lerp(Color3.new(1,1,1),0.15)}) end)
+        b.MouseLeave:Connect(function() tw(b,{BackgroundColor3=bg}) end)
+        return b
+    end
+
+    local actionBtn
+    if cfg.isMine then
+        actionBtn = mkActionBtn(0,100,96, "✦ ACTIVE", Color3.fromRGB(18,45,28))
+        actionBtn.TextColor3 = C.SUCCESS
+        actionBtn.Active     = false
+    else
+        local bg = (cfg.btnLabel == "💎 OFFER") and C.ACCENT or Color3.fromRGB(28,28,52)
+        actionBtn = mkActionBtn(0,100,110, cfg.btnLabel or "🌍 LIST", bg)
+        if cfg.onAction then
+            actionBtn.MouseButton1Click:Connect(function()
+                cfg.onAction(actionBtn)
+            end)
+        end
+    end
+
+    -- remove button
+    if cfg.onRemove then
+        local remBtn = mkActionBtn(1,-118, 106, "🗑 REMOVE", Color3.fromRGB(48,15,15))
+        remBtn.TextColor3 = C.DANGER
+        remBtn.MouseButton1Click:Connect(function()
+            tw(card, {BackgroundTransparency=1, Size=UDim2.new(1,0,0,0)}, 0.22)
+            task.wait(0.25)
+            card:Destroy()
+            if cfg.onRemove then cfg.onRemove() end
+        end)
+    end
+
+    return card
+end
+
+-- ══════════════════ REFRESH FUNCTIONS ══════════════════
+
+local function refreshGlobal()
+    clearContainer(containers["GLOBAL"])
+    setStatus("Fetching global listings...", C.ACCENT2, C.ACCENT2)
+    task.spawn(function()
+        local listings = fetchListings()
+        clearContainer(containers["GLOBAL"])
+        local count = 0
+        for _, data in pairs(listings) do
+            count = count + 1
+            local isMine = (data.User == LP.Name)
+            createCard(containers["GLOBAL"], {
+                animalName = data.AnimalName,
+                ownerName  = data.User,
+                isMine     = isMine,
+                btnLabel   = "💎 OFFER",
+                order      = count,
+                onAction   = isMine and nil or function(btn)
+                    tw(btn, {BackgroundColor3=C.SUCCESS})
+                    btn.Text   = "OFFERED ✓"
+                    btn.Active = false
+                    toast("Offer sent on " .. data.AnimalName, "💎", C.ACCENT2)
+                    -- log to offers tab
+                    createCard(containers["OFFERS"], {
+                        animalName = data.AnimalName,
+                        ownerName  = data.User,
+                        btnLabel   = "OFFERED ✓",
+                        order      = os.time(),
+                    })
+                end,
+            })
+        end
+        if count == 0 then emptyState(containers["GLOBAL"], "No global listings yet.") end
+        applySearch(containers["GLOBAL"], searchBox.Text)
+        setStatus("Global: "..count.." listing(s) live", C.TSUB, C.SUCCESS)
+    end)
+end
+
+-- session-local cache: survives tab switches, cleared only on explicit remove
+local myAdsCache = {} -- [animalName] = { AnimalName, User, Timestamp }
+
+local function buildMyAdsFromCache()
+    clearContainer(containers["MY ADS"])
+    local count = 0
+    for animalName, data in pairs(myAdsCache) do
+        count = count + 1
+        createCard(containers["MY ADS"], {
+            animalName = animalName,
+            ownerName  = LP.Name,
+            isMine     = true,
+            order      = data.Timestamp or count,
+            onRemove   = function()
+                myAdsCache[animalName] = nil
+                task.spawn(function()
+                    removeListing(animalName, LP.Name)
+                    toast("Listing removed", "🗑", C.DANGER)
+                    task.wait(1.5)
+                    refreshGlobal()
+                end)
+                -- rebuild from updated cache
+                buildMyAdsFromCache()
+            end,
+        })
+    end
+    if count == 0 then
+        emptyState(containers["MY ADS"], "You have no active listings.")
+    end
+    applySearch(containers["MY ADS"], searchBox.Text)
+end
+
+-- also sync cache from server (called when tab opened, merges in any server-side listings)
+local function refreshMyAds()
+    -- immediately render cache so tab never appears empty
+    buildMyAdsFromCache()
+    -- then fetch server in background and merge in anything we may have missed
+    task.spawn(function()
+        local listings = fetchListings()
+        local changed = false
+        for _, data in pairs(listings) do
+            if data.User == LP.Name and not myAdsCache[data.AnimalName] then
+                myAdsCache[data.AnimalName] = data
+                changed = true
+            end
+        end
+        if changed then buildMyAdsFromCache() end
+    end)
+end
+
+-- ══════════════════ TAB SWITCHING ══════════════════
+
+local function showTab(name)
+    for n, c in pairs(containers) do c.Visible = (n == name) end
+    setActiveTab(name)
+    if name == "GLOBAL"  then refreshGlobal()  end
+    if name == "MY ADS"  then refreshMyAds()   end
+    applySearch(containers[name], searchBox.Text)
+end
+
+for name, btn in pairs(tabBtns) do
+    btn.MouseButton1Click:Connect(function() showTab(name) end)
+end
+
+-- ══════════════════ SCAN ══════════════════
+
+local function doScan(cont)
+    clearContainer(cont)
+    local found = 0
+    for _, plot in pairs(Plots:GetChildren()) do
+        for _, obj in pairs(plot:GetDescendants()) do
+            if obj:IsA("Model") and findAnimator(obj) and obj.Name ~= "Baseplate" then
+                found = found + 1
+                local captured = obj
+                createCard(cont, {
+                    animalName = captured.Name,
+                    btnLabel   = "🌍 LIST",
+                    order      = found,
+                    onAction   = function(btn)
+                        tw(btn, {BackgroundColor3=C.WARN})
+                        btn.Text   = "LISTING..."
+                        btn.Active = false
+                        task.spawn(function()
+                            local data = { User=LP.Name, AnimalName=captured.Name, Timestamp=os.time() }
+                            addListing(data)
+
+                            -- write to session cache immediately — survives all tab switches
+                            myAdsCache[captured.Name] = data
+
+                            tw(btn, {BackgroundColor3=C.SUCCESS})
+                            btn.Text = "LISTED ✓"
+                            toast(captured.Name .. " listed globally!", "🌍", C.SUCCESS)
+
+                            -- wait before reading back so rentry has time to process write
+                            task.wait(1.5)
+                            refreshGlobal()
+                        end)
+                    end,
+                })
+            end
+        end
+    end
+    return found
+end
+
+scanBtn.MouseButton1Click:Connect(function()
+    scanBtn.Text   = "⏳  SCANNING..."
+    scanBtn.Active = false
+    setStatus("Scanning workspace plots...", C.WARN, C.WARN)
+    task.spawn(function()
+        local found = doScan(containers["SCAN"])
+        scanBtn.Text   = "⚡  SCAN PLOTS"
+        scanBtn.Active = true
+        applySearch(containers["SCAN"], searchBox.Text)
+        if found == 0 then
+            emptyState(containers["SCAN"], "No animals found in plots.")
+            setStatus("Scan complete — nothing found", C.DANGER, C.DANGER)
+        else
+            setStatus("Scan complete — "..found.." animal(s) found", C.SUCCESS, C.SUCCESS)
+            toast("Found "..found.." animal(s)", "🔍", C.ACCENT2)
+        end
+    end)
+end)
+
+-- ══════════════════ DRAG ══════════════════
+
+local dragging, dStart, wStart
+header.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dStart = i.Position; wStart = win.Position
+    end
+end)
+UIS.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - dStart
+        win.Position = UDim2.new(wStart.X.Scale, wStart.X.Offset+d.X, wStart.Y.Scale, wStart.Y.Offset+d.Y)
+    end
+end)
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+
+-- ══════════════════ BOOT ══════════════════
+
+-- slide in
+tw(win, { Position=UDim2.new(0.5,-W/2,0.18,0) }, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+task.spawn(function()
+    task.wait(0.55)
+    setActiveTab("SCAN")
+    local found = doScan(containers["SCAN"])
+    if found > 0 then
+        setStatus("Auto-scan: "..found.." animal(s) found", C.SUCCESS, C.SUCCESS)
+    else
+        emptyState(containers["SCAN"], "No animals found — press SCAN PLOTS.")
+        setStatus("Ready — press SCAN PLOTS to begin", C.TSUB, C.SUCCESS)
+    end
+end)
