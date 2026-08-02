@@ -1,0 +1,82 @@
+task.spawn(function()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+
+    local parent
+    if gethui then
+        pcall(function()
+            parent = gethui()
+        end)
+    end
+
+    if not parent then
+        pcall(function()
+            parent = game:GetService("CoreGui")
+        end)
+    end
+
+    if not parent and player then
+        parent = player:WaitForChild("PlayerGui")
+    end
+
+    if not parent then
+        return
+    end
+
+    local old = parent:FindFirstChild("TPSweetBanner")
+    if old then
+        old:Destroy()
+    end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "TPSweetBanner"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.DisplayOrder = 999999
+    gui.Parent = parent
+
+    local backing = Instance.new("Frame")
+    backing.AnchorPoint = Vector2.new(0.5, 0)
+    backing.Position = UDim2.new(0.5, 0, 0, 8)
+    backing.Size = UDim2.fromOffset(420, 56)
+    backing.BackgroundColor3 = Color3.fromRGB(2, 8, 30)
+    backing.BackgroundTransparency = 0.35
+    backing.BorderSizePixel = 0
+    backing.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = backing
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(120, 200, 255)
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.2
+    stroke.Parent = backing
+
+    local label = Instance.new("TextLabel")
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.Size = UDim2.new(1, -20, 1, -12)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBlack
+    label.TextScaled = true
+    label.Text = "discord.gg/tpsweet"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeColor3 = Color3.fromRGB(5, 15, 40)
+    label.TextStrokeTransparency = 0
+    label.Parent = backing
+
+    local constraint = Instance.new("UITextSizeConstraint")
+    constraint.MaxTextSize = 30
+    constraint.MinTextSize = 18
+    constraint.Parent = label
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.45, Color3.fromRGB(150, 220, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 140, 255))
+    })
+    gradient.Parent = label
+end)
