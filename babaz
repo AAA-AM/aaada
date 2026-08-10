@@ -1,0 +1,62 @@
+-- Place this as a Script inside ServerScriptService
+
+local Players = game.Players
+
+local function removeAccessories(character)
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Accessory") then
+            item:Destroy()
+        end
+    end
+end
+
+-- Handle players joining
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        removeAccessories(character)
+    end)
+    if player.Character then
+        removeAccessories(player.Character)
+    end
+end)
+
+-- Handle NPCs already in the game
+for _, model in ipairs(workspace:GetDescendants()) do
+    if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") then
+        removeAccessories(model)
+    end
+end
+
+-- Handle new NPCs/models appearing
+workspace.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") then
+        removeAccessories(descendant)
+    end
+    if descendant:IsA("Accessory") then
+        local parent = descendant.Parent
+        if parent and parent:FindFirstChildOfClass("Humanoid") then
+            descendant:Destroy()
+        end
+    end
+end)
+
+-- Continuous loop: strip accessories from EVERY player and NPC, repeatedly
+task.spawn(function()
+    while true do
+        -- Players
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Character then
+                removeAccessories(player.Character)
+            end
+        end
+
+        -- NPCs
+        for _, model in ipairs(workspace:GetDescendants()) do
+            if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") then
+                removeAccessories(model)
+            end
+        end
+
+        task.wait(0.5) -- adjust interval as needed
+    end
+end)
