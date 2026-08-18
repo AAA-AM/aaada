@@ -1,0 +1,47 @@
+--// Infinity Jump (Hold / Toggle 両対応)
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+
+local infJumpEnabled = true      -- ON/OFF
+local infJumpMode = "hold"       -- "hold" or "toggle"
+local toggleState = false        -- toggle用
+
+local function doJump()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end
+
+-- HOLD モード
+UIS.InputBegan:Connect(function(input)
+    if not infJumpEnabled then return end
+    if infJumpMode ~= "hold" then return end
+
+    if input.KeyCode == Enum.KeyCode.Space then
+        while UIS:IsKeyDown(Enum.KeyCode.Space) do
+            doJump()
+            task.wait(0.05)
+        end
+    end
+end)
+
+-- TOGGLE モード
+UIS.InputBegan:Connect(function(input)
+    if not infJumpEnabled then return end
+    if infJumpMode ~= "toggle" then return end
+
+    if input.KeyCode == Enum.KeyCode.Space then
+        toggleState = not toggleState
+        if toggleState then
+            task.spawn(function()
+                while toggleState do
+                    doJump()
+                    task.wait(0.05)
+                end
+            end)
+        end
+    end
+end)
