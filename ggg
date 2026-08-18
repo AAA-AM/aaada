@@ -1,0 +1,111 @@
+-- 🚀 Mobile-Friendly Infinity Jump (Tap & Hold)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local rootPart
+local humanoid
+local isHolding = false
+local jumpConnection
+local boostActive = false
+
+-- Apply BodyVelocity boost
+local function applyBoost()
+    if not rootPart or boostActive then return end
+    boostActive = true
+    
+    -- Clean up old BodyVelocities
+    for _, v in ipairs(rootPart:GetChildren()) do
+        if v:IsA("BodyVelocity") then
+            v:Destroy()
+        end
+    end
+    
+    local bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(0, math.huge, 0)
+    bv.P = 2000
+    bv.Velocity = Vector3.new(rootPart.Velocity.X, 35, rootPart.Velocity.Z)
+    bv.Parent = rootPart
+    
+    -- Remove after short duration (continuous boosting keeps you floating)
+    task.delay(0.1, function()
+        if bv and bv.Parent then
+            bv:Destroy()
+        end
+        boostActive = false
+    end)
+end
+
+-- Start jump loop when holding
+local function startJumpLoop()
+    if jumpConnection then return end
+    
+    jumpConnection = RunService.Heartbeat:Connect(function()
+        if isHolding and rootPart and humanoid and humanoid.Health > 0 then
+            applyBoost()
+        end
+    end)
+end
+
+-- Stop jump loop
+local function stopJumpLoop()
+    if jumpConnection then
+        jumpConnection:Disconnect()
+        jumpConnection = nil
+    end
+    isHolding = false
+    boostActive = false
+end
+
+-- Touch input detection (left half of screen = jump)
+UserInputService.TouchStarted:Connect(function(input)
+    if not rootPart or not humanoid or humanoid.Health <= 0 then return end
+    
+    local screenPos = input.Position
+    if screenPos.X < workspace.CurrentCamera.ViewportSize.X / 2 then
+        isHolding = true
+        startJumpLoop()
+    end
+end)
+
+UserInputService.TouchEnded:Connect(function(input)
+    if input.Position.X < workspace.CurrentCamera.ViewportSize.X / 2 then
+        isHolding = false
+        stopJumpLoop()
+    end
+end)
+
+UserInputService.TouchCancelled:Connect(function(input)
+    if input.Position.X < workspace.CurrentCamera.ViewportSize.X / 2 then
+        isHolding = false
+        stopJumpLoop()
+    end
+end)
+
+-- Character setup
+local function setupCharacter(char)
+    humanoid = char:WaitForChild("Humanoid")
+    rootPart = char:WaitForChild("HumanoidRootPart")
+    humanoid.JumpPower = 0 -- Disable normal jump
+    
+    -- Clean up existing BodyVelocities
+    if rootPart then
+        for _, v in ipairs(rootPart:GetChildren()) do
+            if v:IsA("BodyVelocity") then
+                v:Destroy()
+            end
+        end
+    end
+end
+
+player.CharacterAdded:Connect(setupCharacter)
+if player.Character then
+    setupCharacter(player.Character)
+end
+
+-- Cleanup on teleport
+game:GetService("Players").LocalPlayer.OnTeleport:Connect(function()
+    stopJumpLoop()
+end)
