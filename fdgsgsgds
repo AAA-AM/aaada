@@ -1,0 +1,643 @@
+-- deobf and rn by prince https://discord.gg/TBBAUZu8cW
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local localPlayer = Players.LocalPlayer
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+local getUpvalues = (debug and debug.getupvalues) or getupvalues
+local getConnections = getconnections or (debug and debug.getconnections)
+local setupUpvalue = (debug and debug.setupvalue) or setupvalue
+
+if setfpscap then
+    pcall(setfpscap, 60)
+end
+
+local redeemSound = Instance.new("Sound")
+redeemSound.Parent = game.Workspace
+redeemSound.SoundId = "rbxassetid://113671164765342"
+redeemSound.Volume = 20
+redeemSound.Pitch = 1
+redeemSound.Looped = true
+local distortionEffect = Instance.new("DistortionSoundEffect")
+distortionEffect.Parent = redeemSound
+distortionEffect.Level = 4
+local audioEnabled = true
+
+local function playRedeemAudio()
+    if audioEnabled then
+        redeemSound:Stop()
+        redeemSound:Play()
+    end
+end
+
+local function isSpyderHubGui(instance)
+    local parent = instance
+    for _ = 1, 10 do
+        if not parent then break end
+        if parent.Name == "SpyderHubGui" then return true end
+        parent = parent.Parent
+    end
+    return false
+end
+
+local function isVisibleChain(instance)
+    local current = instance
+    while current do
+        if current:IsA("GuiObject") and not current.Visible then return false end
+        if current:IsA("ScreenGui") then return current.Enabled end
+        current = current.Parent
+    end
+    return true
+end
+
+local function findAllTextBoxes(playerGuiInstance)
+    local boxes = {}
+    for _, gui in ipairs(playerGuiInstance:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "SpyderHubGui" then
+            for _, descendant in ipairs(gui:GetDescendants()) do
+                if descendant:IsA("TextBox") and not isSpyderHubGui(descendant) then
+                    boxes[#boxes + 1] = descendant
+                end
+            end
+        end
+    end
+    return boxes
+end
+
+local function findCodeButtons(playerGuiInstance)
+    local buttons = {}
+    for _, gui in ipairs(playerGuiInstance:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "SpyderHubGui" then
+            for _, descendant in ipairs(gui:GetDescendants()) do
+                if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and not isSpyderHubGui(descendant) then
+                    local name = descendant.Name:lower()
+                    local parentName = (descendant.Parent and descendant.Parent.Name or ""):lower()
+                    if (name:find("code") or name:find("redeem") or parentName:find("code") or parentName:find("redeem")) and isVisibleChain(descendant) then
+                        buttons[#buttons + 1] = descendant
+                    end
+                end
+            end
+        end
+    end
+    return buttons
+end
+
+local function clickButton(button)
+    if not button then return false end
+    local methods = {
+        function() button.MouseButton1Click:Fire() end,
+        function() button.Activated:Fire() end
+    }
+    if typeof(firesignal) == "function" then
+        table.insert(methods, function() firesignal(button.MouseButton1Click) end)
+        table.insert(methods, function() firesignal(button.Activated) end)
+    end
+    if typeof(getConnections) == "function" then
+        table.insert(methods, function()
+            local success, connections = pcall(getConnections, button.MouseButton1Click)
+            if success and type(connections) == "table" then for _, conn in ipairs(connections) do pcall(function() conn:Fire() end) end end
+            local success2, connections2 = pcall(getConnections, button.Activated)
+            if success2 and type(connections2) == "table" then for _, conn in ipairs(connections2) do pcall(function() conn:Fire() end) end end
+        end)
+    end
+    if typeof(fireclick) == "function" then table.insert(methods, function() fireclick(button) end) end
+    local anySuccess = false
+    for _, method in ipairs(methods) do local success = pcall(method); anySuccess = anySuccess or success end
+    return anySuccess
+end
+
+local function writeCodeToBox(box, code)
+    if not box then return false end
+    pcall(function() box.Text = code end)
+    return box.Text == code
+end
+
+local function fireBoxFocusLost(box)
+    if not box then return false end
+    local anyFired = false
+    if typeof(firesignal) == "function" then
+        local success = pcall(firesignal, box.FocusLost, true)
+        anyFired = anyFired or success
+    end
+    if typeof(getConnections) == "function" then
+        local success, connections = pcall(getConnections, box.FocusLost)
+        if success and type(connections) == "table" then
+            for _, conn in ipairs(connections) do
+                local func
+                pcall(function() func = conn.Function end)
+                if func and typeof(getUpvalues) == "function" and typeof(setupUpvalue) == "function" then
+                    local upSuccess, upvalues = pcall(getUpvalues, func)
+                    if upSuccess and type(upvalues) == "table" then
+                        for index, value in pairs(upvalues) do
+                            if type(value) == "boolean" and value == true then pcall(setupUpvalue, func, index, false) end
+                        end
+                    end
+                end
+                local fireSuccess = pcall(function() if conn.Enabled ~= false then conn:Fire(true) end end)
+                anyFired = anyFired or fireSuccess
+            end
+        end
+    end
+    return anyFired
+end
+
+local function typeAndSubmitCode(code)
+    if not localPlayer then return false end
+    local pg = localPlayer:FindFirstChildOfClass("PlayerGui")
+    if not pg then return false end
+
+    local codesGui = pg:FindFirstChild("Codes")
+    if codesGui then
+        if codesGui:IsA("ScreenGui") then codesGui.Enabled = true end
+        local codesFrame = codesGui:FindFirstChild("Codes") or codesGui
+        if codesFrame then
+            if codesFrame:IsA("GuiObject") then codesFrame.Visible = true end
+            local current = codesFrame
+            while current and current ~= codesGui do
+                if current:IsA("GuiObject") then current.Visible = true end
+                current = current.Parent
+            end
+            local box = nil
+            for _, descendant in ipairs(codesFrame:GetDescendants()) do
+                if descendant:IsA("TextBox") and not isSpyderHubGui(descendant) then box = descendant; break end
+            end
+            local submitButton = nil
+            for _, descendant in ipairs(codesFrame:GetDescendants()) do
+                if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and not isSpyderHubGui(descendant) then
+                    local name = descendant.Name:lower(); local text = ""
+                    pcall(function() text = descendant.Text:lower() end)
+                    if name:find("submit") or text:find("submit") or name:find("redeem") or text:find("redeem") or name:find("claim") or text:find("confirm") or name:find("enter") then
+                        submitButton = descendant; break
+                    end
+                end
+            end
+            if not submitButton then
+                for _, descendant in ipairs(codesFrame:GetDescendants()) do
+                    if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and not isSpyderHubGui(descendant) then
+                        local name = descendant.Name:lower()
+                        if not name:find("close") and not name:find("x") and not name:find("toggle") then submitButton = descendant; break end
+                    end
+                end
+            end
+            if box then
+                writeCodeToBox(box, code); task.wait(0.05)
+                if submitButton then clickButton(submitButton) end
+                fireBoxFocusLost(box); playRedeemAudio()
+                return true
+            end
+        end
+    end
+
+    local buttons = findCodeButtons(pg)
+    for _, button in ipairs(buttons) do clickButton(button); task.wait(0.05) end
+    task.wait(0.3)
+
+    local box = nil
+    local deadline = tick() + 3
+    while tick() < deadline do
+        local allBoxes = findAllTextBoxes(pg)
+        for _, descendant in ipairs(allBoxes) do
+            if isVisibleChain(descendant) then
+                local name = descendant.Name:lower(); local parentName = (descendant.Parent and descendant.Parent.Name or ""):lower()
+                if name:find("code") or parentName:find("code") or name:find("redeem") or parentName:find("redeem")
+                    or name:find("input") or parentName:find("input") or name:find("textbox") or name:find("enter") then
+                    box = descendant; break
+                end
+            end
+        end
+        if not box then
+            for _, descendant in ipairs(findAllTextBoxes(pg)) do
+                if isVisibleChain(descendant) then box = descendant; break end
+            end
+        end
+        if box then break end
+        task.wait(0.1)
+    end
+
+    if not box then return false end
+    writeCodeToBox(box, code); task.wait(0.05)
+
+    local redeemButton = nil
+    local searchNames = {"submit","redeem","claim","confirm","enter","send","apply","ok","use","go","check"}
+    local parent = box.Parent
+    for _ = 1, 8 do
+        if not parent then break end
+        for _, descendant in ipairs(parent:GetDescendants()) do
+            if (descendant:IsA("TextButton") or descendant:IsA("ImageButton")) and not isSpyderHubGui(descendant) and descendant ~= box then
+                local name = descendant.Name:lower(); local text = ""
+                pcall(function() text = descendant.Text:lower() end)
+                for _, searchName in ipairs(searchNames) do
+                    if name:find(searchName) or text:find(searchName) then
+                        if isVisibleChain(descendant) then redeemButton = descendant; break end
+                    end
+                end
+                if redeemButton then break end
+            end
+        end
+        if redeemButton then break end
+        parent = parent.Parent
+    end
+    if redeemButton then clickButton(redeemButton) end
+    fireBoxFocusLost(box); playRedeemAudio()
+    return true
+end
+
+local function resolveNotifyRemote()
+    if _G.PhiNotifyRemote then return _G.PhiNotifyRemote end
+    local success, netFolder = pcall(function()
+        return ReplicatedStorage:WaitForChild("Packages", 2):WaitForChild("Net", 2)
+    end)
+    local getInfo = debug and (debug.getinfo or debug.info)
+    local function checkRemote(descendant)
+        if not descendant:IsA("RemoteEvent") then return nil end
+        local lowerName = descendant.Name:lower()
+        if lowerName:find("notif") or lowerName:find("announce") or lowerName:find("message") or lowerName:find("chat") or lowerName:find("global") then
+            return descendant
+        end
+        if getgc and getInfo and getConnections then
+            local success2, connections = pcall(getConnections, descendant.OnClientEvent)
+            if success2 and connections then
+                for _, conn in ipairs(connections) do
+                    local funcSuccess, func = pcall(function() return conn.Function end)
+                    if funcSuccess and type(func) == "function" then
+                        local infoSuccess, info = pcall(getInfo, func)
+                        if infoSuccess then
+                            local source = tostring(info.short_src or info.source or "")
+                            if source:find("Notification", 1, true) or source:find("Announce", 1, true) or source:find("Chat", 1, true) then
+                                return descendant
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        return nil
+    end
+    if success and netFolder then
+        for _, descendant in ipairs(netFolder:GetDescendants()) do
+            local remote = checkRemote(descendant)
+            if remote then return remote end
+        end
+    end
+    for _, descendant in ipairs(ReplicatedStorage:GetDescendants()) do
+        local remote = checkRemote(descendant)
+        if remote then return remote end
+    end
+    return nil
+end
+
+if playerGui:FindFirstChild("SpyderHubGui") then
+    playerGui.SpyderHubGui:Destroy()
+end
+
+local colors = {
+    bg1      = Color3.fromRGB(20, 20, 22),
+    bg2      = Color3.fromRGB(36, 36, 40),
+    topbar   = Color3.fromRGB(14, 14, 16),
+    border   = Color3.fromRGB(65, 65, 72),
+    accentHi = Color3.fromRGB(210, 210, 225),
+    text     = Color3.fromRGB(195, 195, 208),
+    subtext  = Color3.fromRGB(100, 100, 115),
+    inputBg  = Color3.fromRGB(12, 12, 14),
+    btnBg    = Color3.fromRGB(30, 30, 34),
+    btnHover = Color3.fromRGB(50, 50, 56),
+    green    = Color3.fromRGB(85, 215, 120),
+    yellow   = Color3.fromRGB(225, 185, 55),
+    red      = Color3.fromRGB(215, 60, 70),
+}
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SpyderHubGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 300, 0, 250)
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -125)
+mainFrame.BackgroundColor3 = colors.bg1
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = colors.border
+mainStroke.Thickness = 1
+mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainStroke.Parent = mainFrame
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, colors.bg1), ColorSequenceKeypoint.new(1, colors.bg2)})
+gradient.Rotation = 120
+gradient.Parent = mainFrame
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 44)
+topBar.BackgroundColor3 = colors.topbar
+topBar.BorderSizePixel = 0
+topBar.ZIndex = 2
+topBar.Parent = mainFrame
+Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 12)
+local topBarFill = Instance.new("Frame")
+topBarFill.Size = UDim2.new(1, 0, 0, 12)
+topBarFill.Position = UDim2.new(0, 0, 1, -12)
+topBarFill.BackgroundColor3 = colors.topbar
+topBarFill.BorderSizePixel = 0
+topBarFill.ZIndex = 2
+topBarFill.Parent = topBar
+local divider = Instance.new("Frame")
+divider.Size = UDim2.new(1, 0, 0, 1)
+divider.Position = UDim2.new(0, 0, 1, 0)
+divider.BackgroundColor3 = colors.border
+divider.BorderSizePixel = 0
+divider.ZIndex = 3
+divider.Parent = topBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 180, 0, 16)
+titleLabel.Position = UDim2.new(0, 14, 0, 7)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "SPYDER HUB"
+titleLabel.TextColor3 = colors.accentHi
+titleLabel.TextSize = 12
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.ZIndex = 3
+titleLabel.Parent = topBar
+
+local subLabel = Instance.new("TextLabel")
+subLabel.Size = UDim2.new(0, 180, 0, 12)
+subLabel.Position = UDim2.new(0, 14, 0, 26)
+subLabel.BackgroundTransparency = 1
+subLabel.Font = Enum.Font.Gotham
+subLabel.Text = "code redeemer"
+subLabel.TextColor3 = colors.subtext
+subLabel.TextSize = 9
+subLabel.TextXAlignment = Enum.TextXAlignment.Left
+subLabel.ZIndex = 3
+subLabel.Parent = topBar
+
+local statusDot = Instance.new("TextButton")
+statusDot.Size = UDim2.new(0, 9, 0, 9)
+statusDot.Position = UDim2.new(1, -18, 0.5, -5)
+statusDot.BackgroundColor3 = colors.red
+statusDot.BorderSizePixel = 0
+statusDot.Text = ""
+statusDot.AutoButtonColor = false
+statusDot.ZIndex = 4
+statusDot.Parent = topBar
+Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
+
+local function makeBtn(name, size, pos, text, parent)
+    local btn = Instance.new("TextButton")
+    btn.Name = name; btn.Size = size; btn.Position = pos
+    btn.BackgroundColor3 = colors.btnBg; btn.BorderSizePixel = 0
+    btn.Font = Enum.Font.GothamBold; btn.Text = text
+    btn.TextColor3 = colors.text; btn.TextSize = 10
+    btn.AutoButtonColor = false; btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+    local stroke = Instance.new("UIStroke"); stroke.Color = colors.border; stroke.Thickness = 1; stroke.Parent = btn
+    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = colors.btnHover}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = colors.btnBg}):Play() end)
+    return btn
+end
+
+local function makeInput(name, size, pos, placeholder, parent)
+    local box = Instance.new("TextBox")
+    box.Name = name; box.Size = size; box.Position = pos
+    box.BackgroundColor3 = colors.inputBg; box.BorderSizePixel = 0
+    box.PlaceholderText = placeholder; box.PlaceholderColor3 = colors.subtext
+    box.Text = ""; box.TextColor3 = colors.accentHi
+    box.ClearTextOnFocus = false; box.Font = Enum.Font.GothamBold
+    box.TextSize = 10; box.TextXAlignment = Enum.TextXAlignment.Left
+    box.Parent = parent
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 7)
+    local stroke = Instance.new("UIStroke"); stroke.Color = colors.border; stroke.Thickness = 1; stroke.Parent = box
+    local padding = Instance.new("UIPadding"); padding.PaddingLeft = UDim.new(0, 8); padding.PaddingRight = UDim.new(0, 8); padding.Parent = box
+    return box
+end
+
+local function makePill(name, size, pos, text, parent)
+    local lbl = Instance.new("TextLabel")
+    lbl.Name = name; lbl.Size = size; lbl.Position = pos
+    lbl.BackgroundColor3 = colors.inputBg; lbl.BorderSizePixel = 0
+    lbl.Font = Enum.Font.GothamBold; lbl.Text = text
+    lbl.TextColor3 = colors.subtext; lbl.TextSize = 9
+    lbl.TextXAlignment = Enum.TextXAlignment.Center; lbl.Parent = parent
+    Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 7)
+    local stroke = Instance.new("UIStroke"); stroke.Color = colors.border; stroke.Thickness = 1; stroke.Parent = lbl
+    return lbl
+end
+
+local scanBtn = makeBtn("ScanBtn", UDim2.new(1,-24,0,28), UDim2.new(0,12,0,52), "START SCAN", mainFrame)
+local modeBtn = makeBtn("ModeBtn", UDim2.new(1,-24,0,28), UDim2.new(0,12,0,86), "MODE: 3 GLOBAL MESSAGES", mainFrame)
+modeBtn.TextSize = 9; modeBtn.TextColor3 = colors.subtext
+
+local previewBox = makeInput("PreviewBox", UDim2.new(1,-102,0,28), UDim2.new(0,12,0,120), "Captured code...", mainFrame)
+local redeemBtn = makeBtn("RedeemBtn", UDim2.new(0,70,0,28), UDim2.new(1,-82,0,120), "REDEEM", mainFrame)
+
+local bottomRow = Instance.new("Frame")
+bottomRow.Size = UDim2.new(1,-24,0,28); bottomRow.Position = UDim2.new(0,12,0,154)
+bottomRow.BackgroundTransparency = 1; bottomRow.Parent = mainFrame
+
+local delayLabel = Instance.new("TextLabel")
+delayLabel.Size = UDim2.new(0,42,1,0); delayLabel.BackgroundTransparency = 1
+delayLabel.Font = Enum.Font.GothamBold; delayLabel.Text = "Delay:"
+delayLabel.TextColor3 = colors.subtext; delayLabel.TextSize = 10
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left; delayLabel.Parent = bottomRow
+
+local delayBox = makeInput("DelayBox", UDim2.new(0,44,1,0), UDim2.new(0,46,0,0), "", bottomRow)
+delayBox.Text = "0.5"; delayBox.TextXAlignment = Enum.TextXAlignment.Center
+
+local setBtn = makeBtn("SetBtn", UDim2.new(0,56,1,0), UDim2.new(1,-56,0,0), "SET", bottomRow)
+
+local fpsPill = makePill("FpsPill", UDim2.new(0,68,0,22), UDim2.new(0,12,0,188), "FPS --", mainFrame)
+local pingPill = makePill("PingPill", UDim2.new(0,80,0,22), UDim2.new(0,88,0,188), "PING --", mainFrame)
+local audioBtn = makeBtn("AudioBtn", UDim2.new(0,86,0,22), UDim2.new(1,-98,0,188), "AUDIO ON", mainFrame)
+audioBtn.TextColor3 = colors.green; audioBtn.TextSize = 9
+
+local fpsBuffer = {}
+local fpsFlush = 0
+
+RunService.RenderStepped:Connect(function(dt)
+    if dt > 0 then
+        fpsBuffer[#fpsBuffer + 1] = 1 / dt
+    end
+    fpsFlush += dt
+    if fpsFlush >= 0.35 and #fpsBuffer > 0 then
+        fpsFlush = 0
+        local sum = 0
+        for i = 1, #fpsBuffer do sum += fpsBuffer[i] end
+        local avg = math.round(sum / #fpsBuffer)
+        fpsBuffer = {}
+        fpsPill.Text = "FPS " .. avg
+        fpsPill.TextColor3 = avg >= 55 and colors.green or avg >= 30 and colors.yellow or colors.red
+    end
+end)
+
+local pingAccum = 0
+RunService.Heartbeat:Connect(function(dt)
+    pingAccum += dt
+    if pingAccum < 2 then return end
+    pingAccum = 0
+    local success, val = pcall(function()
+        return math.round(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+    end)
+    if success and type(val) == "number" then
+        pingPill.Text = "PING " .. val .. "ms"
+        pingPill.TextColor3 = val <= 80 and colors.green or val <= 180 and colors.yellow or colors.red
+    end
+end)
+
+audioBtn.MouseButton1Click:Connect(function()
+    audioEnabled = not audioEnabled
+    if audioEnabled then
+        audioBtn.Text = "AUDIO ON"
+        audioBtn.TextColor3 = colors.green
+    else
+        audioBtn.Text = "AUDIO OFF"
+        audioBtn.TextColor3 = colors.red
+        redeemSound:Stop()
+    end
+end)
+
+local dragging, dragInput, dragStart, startPos
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true; dragStart = input.Position; startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+statusDot.MouseButton1Click:Connect(function() redeemSound:Stop(); screenGui:Destroy() end)
+
+local scanning = false
+local codeBuffer = {}
+local mode = 3
+local delay = 0.5
+
+local function updateDelay()
+    local val = tonumber(delayBox.Text)
+    if val and val >= 0.05 then delay = val else delayBox.Text = tostring(delay) end
+end
+delayBox.FocusLost:Connect(function(e) if e then updateDelay() end end)
+delayBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local val = tonumber(delayBox.Text)
+    if val and val >= 0.05 then delay = val end
+end)
+setBtn.MouseButton1Click:Connect(updateDelay)
+
+local function isValidCode(msg)
+    return type(msg) == "string" and #msg >= 2 and msg:match("^[A-Za-z0-9]+$") ~= nil
+end
+
+local function updatePreview()
+    if #codeBuffer == 0 then previewBox.Text = ""; return end
+    previewBox.Text = table.concat(codeBuffer, "", 1, math.min(#codeBuffer, mode))
+end
+
+local function processBuffer()
+    if not scanning then return end
+    while scanning and #codeBuffer >= mode do
+        local combined = table.concat(codeBuffer, "", 1, mode)
+        codeBuffer = {}; updatePreview()
+        task.spawn(typeAndSubmitCode, combined)
+        task.wait(delay)
+    end
+    updatePreview()
+end
+
+local function extractText(...)
+    local args = {...}
+    for _, v in ipairs(args) do
+        if type(v) == "string" and v ~= "" then
+            local clean = v:match("^%s*(.-)%s*$")
+            if isValidCode(clean) then return clean end
+        elseif type(v) == "table" then
+            for _, tv in pairs(v) do
+                if type(tv) == "string" and tv ~= "" then
+                    local clean = tv:match("^%s*(.-)%s*$")
+                    if isValidCode(clean) then return clean end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function onAnnouncement(...)
+    if not scanning then return end
+    local code = extractText(...)
+    if code then
+        table.insert(codeBuffer, code)
+        updatePreview()
+        print("[Spyder Hub] captured:", code, "buffer:", #codeBuffer)
+        if #codeBuffer >= mode then task.spawn(processBuffer) end
+    end
+end
+
+local function toggleScan()
+    scanning = not scanning
+    if scanning then
+        scanBtn.Text = "SCANNING..."
+        TweenService:Create(scanBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(25, 75, 40)}):Play()
+        statusDot.BackgroundColor3 = colors.green
+        codeBuffer = {}; updatePreview()
+        print("[Spyder Hub] scan ON")
+    else
+        scanBtn.Text = "START SCAN"
+        TweenService:Create(scanBtn, TweenInfo.new(0.18), {BackgroundColor3 = colors.btnBg}):Play()
+        statusDot.BackgroundColor3 = colors.red
+        codeBuffer = {}; updatePreview()
+        print("[Spyder Hub] scan OFF")
+    end
+end
+
+scanBtn.MouseButton1Click:Connect(toggleScan)
+
+modeBtn.MouseButton1Click:Connect(function()
+    mode = (mode % 4) + 1
+    modeBtn.Text = "MODE: " .. mode .. " GLOBAL MESSAGE" .. (mode > 1 and "S" or "")
+    updatePreview()
+    if scanning and #codeBuffer >= mode then task.spawn(processBuffer) end
+end)
+
+local function manualRedeem()
+    local code = previewBox.Text
+    if code and code ~= "" then
+        task.spawn(typeAndSubmitCode, code)
+        codeBuffer = {}; updatePreview()
+    end
+end
+redeemBtn.MouseButton1Click:Connect(manualRedeem)
+previewBox.FocusLost:Connect(function(e) if e then manualRedeem() end end)
+
+task.spawn(function()
+    local remote = resolveNotifyRemote()
+    if remote then
+        remote.OnClientEvent:Connect(onAnnouncement)
+        print("[Spyder Hub] remote hooked:", remote.Name)
+    else
+        warn("[Spyder Hub] no notify remote found — scanning passive only")
+    end
+end)
+
+print("[Spyder Hub] ready 6767")
