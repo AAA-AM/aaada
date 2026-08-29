@@ -1,0 +1,900 @@
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService        = game:GetService("RunService")
+local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local HttpService       = game:GetService("HttpService")
+
+local lp        = Players.LocalPlayer
+local playerGui = lp:WaitForChild("PlayerGui")
+local _enabled  = true
+local _seen     = {}
+local _focused  = nil
+
+local ANTHROPIC_KEY = "sk-ant-api03-placeholder-replace-with-real-key"
+
+-- Screen height threshold for "top of screen" detection (top 20%)
+local TOP_SCREEN_THRESHOLD = 0.20
+
+local T = {
+    BG     = Color3.fromRGB(8,8,12),
+    Card   = Color3.fromRGB(16,16,24),
+    Border = Color3.fromRGB(38,38,58),
+    Accent = Color3.fromRGB(80,140,255),
+    Green  = Color3.fromRGB(70,210,100),
+    Red    = Color3.fromRGB(255,70,70),
+    Yellow = Color3.fromRGB(255,195,50),
+    White  = Color3.fromRGB(215,225,255),
+    Dim    = Color3.fromRGB(65,65,95),
+}
+local F = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local function Tw(o,i,p) TweenService:Create(o,i,p):Play() end
+local function Corner(p,r)
+    local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,r or 8); c.Parent=p
+end
+local function Stroke(p,col,th)
+    local s=Instance.new("UIStroke"); s.Color=col or T.Border
+    s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; s.Parent=p; return s
+end
+
+pcall(function()
+    if game.CoreGui:FindFirstChild("SDLCPaste") then game.CoreGui.SDLCPaste:Destroy() end
+end)
+pcall(function()
+    if playerGui:FindFirstChild("SDLCPaste") then playerGui.SDLCPaste:Destroy() end
+end)
+
+local GUI = Instance.new("ScreenGui")
+GUI.Name="SDLCPaste"; GUI.ResetOnSpawn=false; GUI.IgnoreGuiInset=true
+GUI.DisplayOrder=999
+if not pcall(function() GUI.Parent=game.CoreGui end) then GUI.Parent=playerGui end
+
+local WIN_W = 205
+
+local Win = Instance.new("Frame")
+Win.Name="Win"
+Win.Size=UDim2.new(0,WIN_W,0,10)
+Win.AutomaticSize=Enum.AutomaticSize.Y
+Win.AnchorPoint=Vector2.new(1,0)
+Win.Position=UDim2.new(1,-14,0,52)
+Win.BackgroundColor3=T.BG
+Win.BackgroundTransparency=0
+Win.BorderSizePixel=0
+Win.ZIndex=100
+Win.ClipsDescendants=true
+Win.Parent=GUI
+Corner(Win,10)
+
+local WBorder=Stroke(Win, T.Accent, 1.4)
+local WBG=Instance.new("UIGradient")
+WBG.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(25,55,160)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80,140,255)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(25,55,160)),
+})
+WBG.Rotation=0
+WBG.Parent=WBorder
+
+RunService.RenderStepped:Connect(function(dt)
+    WBG.Rotation = (WBG.Rotation + dt*55) % 360
+end)
+
+local WinList=Instance.new("UIListLayout")
+WinList.FillDirection=Enum.FillDirection.Vertical
+WinList.Padding=UDim.new(0,0)
+WinList.SortOrder=Enum.SortOrder.LayoutOrder
+WinList.HorizontalAlignment=Enum.HorizontalAlignment.Center
+WinList.Parent=Win
+
+local Hdr=Instance.new("Frame")
+Hdr.Size=UDim2.new(1,0,0,36)
+Hdr.BackgroundColor3=Color3.fromRGB(12,12,20)
+Hdr.BackgroundTransparency=0
+Hdr.BorderSizePixel=0
+Hdr.LayoutOrder=1
+Hdr.Active=true
+Hdr.ZIndex=101
+Hdr.Parent=Win
+Corner(Hdr,10)
+
+local HdrBG=Instance.new("UIGradient")
+HdrBG.Color=ColorSequence.new(Color3.fromRGB(14,14,22), Color3.fromRGB(10,10,18))
+HdrBG.Rotation=90
+HdrBG.Parent=Hdr
+
+local HdrFill=Instance.new("Frame")
+HdrFill.Size=UDim2.new(1,0,0,10)
+HdrFill.Position=UDim2.new(0,0,1,-10)
+HdrFill.BackgroundColor3=Color3.fromRGB(12,12,20)
+HdrFill.BorderSizePixel=0
+HdrFill.ZIndex=101
+HdrFill.Parent=Hdr
+
+local HdrLine=Instance.new("Frame")
+HdrLine.Size=UDim2.new(1,0,0,1)
+HdrLine.Position=UDim2.new(0,0,1,0)
+HdrLine.BackgroundColor3=T.Accent
+HdrLine.BackgroundTransparency=0.55
+HdrLine.BorderSizePixel=0
+HdrLine.ZIndex=102
+HdrLine.Parent=Hdr
+
+local Logo=Instance.new("Frame")
+Logo.Size=UDim2.new(0,18,0,18)
+Logo.Position=UDim2.new(0,9,0.5,-9)
+Logo.BackgroundColor3=T.Accent
+Logo.BorderSizePixel=0
+Logo.ZIndex=103
+Logo.Parent=Hdr
+Corner(Logo,5)
+local LogoBG=Instance.new("UIGradient")
+LogoBG.Color=ColorSequence.new(Color3.fromRGB(60,120,255), Color3.fromRGB(30,60,200))
+LogoBG.Rotation=135
+LogoBG.Parent=Logo
+local LogoTxt=Instance.new("TextLabel")
+LogoTxt.Size=UDim2.new(1,0,1,0)
+LogoTxt.BackgroundTransparency=1
+LogoTxt.Text="S"
+LogoTxt.TextSize=10
+LogoTxt.Font=Enum.Font.GothamBlack
+LogoTxt.TextColor3=T.White
+LogoTxt.TextXAlignment=Enum.TextXAlignment.Center
+LogoTxt.TextYAlignment=Enum.TextYAlignment.Center
+LogoTxt.ZIndex=104
+LogoTxt.Parent=Logo
+
+local TitleL=Instance.new("TextLabel")
+TitleL.Size=UDim2.new(0,100,1,0)
+TitleL.Position=UDim2.new(0,31,0,0)
+TitleL.BackgroundTransparency=1
+TitleL.RichText=true
+TitleL.Text='<font color="rgb(90,150,255)">SDLC</font> <font color="rgb(170,190,255)" size="10">Paste</font>'
+TitleL.TextSize=12
+TitleL.Font=Enum.Font.GothamBold
+TitleL.TextColor3=T.White
+TitleL.TextXAlignment=Enum.TextXAlignment.Left
+TitleL.TextYAlignment=Enum.TextYAlignment.Center
+TitleL.ZIndex=102
+TitleL.Parent=Hdr
+
+local OnBtn=Instance.new("TextButton")
+OnBtn.Size=UDim2.new(0,36,0,18)
+OnBtn.AnchorPoint=Vector2.new(1,0.5)
+OnBtn.Position=UDim2.new(1,-8,0.5,0)
+OnBtn.BackgroundColor3=T.Green
+OnBtn.BorderSizePixel=0
+OnBtn.AutoButtonColor=false
+OnBtn.Text="ON"
+OnBtn.TextSize=9
+OnBtn.Font=Enum.Font.GothamBold
+OnBtn.TextColor3=Color3.fromRGB(8,8,12)
+OnBtn.ZIndex=103
+OnBtn.Parent=Hdr
+Corner(OnBtn,5)
+local OnS=Stroke(OnBtn,T.Green,1)
+
+do
+    local drag,ds,ws,mv
+    Hdr.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1
+        or inp.UserInputType==Enum.UserInputType.Touch then
+            drag=true; mv=false; ds=inp.Position; ws=Win.Position
+        end
+    end)
+    Hdr.InputEnded:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1
+        or inp.UserInputType==Enum.UserInputType.Touch then drag=false end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if drag and (inp.UserInputType==Enum.UserInputType.MouseMovement
+        or inp.UserInputType==Enum.UserInputType.Touch) then
+            local d=inp.Position-ds
+            if not mv and d.Magnitude<5 then return end
+            mv=true
+            Win.Position=UDim2.new(ws.X.Scale,ws.X.Offset+d.X,ws.Y.Scale,ws.Y.Offset+d.Y)
+        end
+    end)
+end
+
+local Body=Instance.new("Frame")
+Body.Size=UDim2.new(1,0,0,0)
+Body.AutomaticSize=Enum.AutomaticSize.Y
+Body.BackgroundTransparency=1
+Body.BorderSizePixel=0
+Body.LayoutOrder=2
+Body.ZIndex=101
+Body.Parent=Win
+
+local BL=Instance.new("UIListLayout")
+BL.FillDirection=Enum.FillDirection.Vertical
+BL.Padding=UDim.new(0,5)
+BL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+BL.Parent=Body
+
+local BPad=Instance.new("UIPadding")
+BPad.PaddingTop=UDim.new(0,7)
+BPad.PaddingBottom=UDim.new(0,9)
+BPad.PaddingLeft=UDim.new(0,8)
+BPad.PaddingRight=UDim.new(0,8)
+BPad.Parent=Body
+
+local StatusCard=Instance.new("Frame")
+StatusCard.Size=UDim2.new(1,0,0,26)
+StatusCard.BackgroundColor3=T.Card
+StatusCard.BackgroundTransparency=0
+StatusCard.BorderSizePixel=0
+StatusCard.ZIndex=102
+StatusCard.Parent=Body
+Corner(StatusCard,7)
+Stroke(StatusCard,T.Border,1)
+
+local SDot=Instance.new("Frame")
+SDot.Size=UDim2.new(0,6,0,6)
+SDot.Position=UDim2.new(0,8,0.5,-3)
+SDot.BackgroundColor3=T.Dim
+SDot.BorderSizePixel=0
+SDot.ZIndex=103
+SDot.Parent=StatusCard
+Corner(SDot,3)
+
+local SLbl=Instance.new("TextLabel")
+SLbl.Size=UDim2.new(1,-22,1,0)
+SLbl.Position=UDim2.new(0,18,0,0)
+SLbl.BackgroundTransparency=1
+SLbl.Text="Click the code box first"
+SLbl.TextSize=10
+SLbl.Font=Enum.Font.GothamMedium
+SLbl.TextColor3=T.Dim
+SLbl.TextXAlignment=Enum.TextXAlignment.Left
+SLbl.TextYAlignment=Enum.TextYAlignment.Center
+SLbl.ZIndex=103
+SLbl.Parent=StatusCard
+
+local CodeCard=Instance.new("Frame")
+CodeCard.Size=UDim2.new(1,0,0,42)
+CodeCard.BackgroundColor3=T.Card
+CodeCard.BackgroundTransparency=0
+CodeCard.BorderSizePixel=0
+CodeCard.ZIndex=102
+CodeCard.Parent=Body
+Corner(CodeCard,7)
+local CodeStroke=Stroke(CodeCard,T.Border,1)
+local CodeBG=Instance.new("UIGradient")
+CodeBG.Color=ColorSequence.new(Color3.fromRGB(14,14,22),Color3.fromRGB(11,11,18))
+CodeBG.Rotation=90
+CodeBG.Parent=CodeCard
+
+local CodeSmall=Instance.new("TextLabel")
+CodeSmall.Size=UDim2.new(1,-10,0,12)
+CodeSmall.Position=UDim2.new(0,9,0,5)
+CodeSmall.BackgroundTransparency=1
+CodeSmall.Text="DETECTED"
+CodeSmall.TextSize=7
+CodeSmall.Font=Enum.Font.GothamBold
+CodeSmall.TextColor3=T.Dim
+CodeSmall.TextXAlignment=Enum.TextXAlignment.Left
+CodeSmall.ZIndex=103
+CodeSmall.Parent=CodeCard
+
+local CodeVal=Instance.new("TextLabel")
+CodeVal.Size=UDim2.new(1,-10,0,22)
+CodeVal.Position=UDim2.new(0,9,0,17)
+CodeVal.BackgroundTransparency=1
+CodeVal.Text="—"
+CodeVal.TextSize=17
+CodeVal.Font=Enum.Font.GothamBlack
+CodeVal.TextColor3=T.Dim
+CodeVal.TextXAlignment=Enum.TextXAlignment.Left
+CodeVal.TextYAlignment=Enum.TextYAlignment.Center
+CodeVal.ZIndex=103
+CodeVal.Parent=CodeCard
+
+local RiddleCard=Instance.new("Frame")
+RiddleCard.Size=UDim2.new(1,0,0,0)
+RiddleCard.AutomaticSize=Enum.AutomaticSize.Y
+RiddleCard.BackgroundColor3=Color3.fromRGB(30,22,8)
+RiddleCard.BackgroundTransparency=0
+RiddleCard.BorderSizePixel=0
+RiddleCard.Visible=false
+RiddleCard.ZIndex=102
+RiddleCard.Parent=Body
+Corner(RiddleCard,7)
+Stroke(RiddleCard,T.Yellow,1)
+local RiddlePad=Instance.new("UIPadding")
+RiddlePad.PaddingTop=UDim.new(0,5); RiddlePad.PaddingBottom=UDim.new(0,6)
+RiddlePad.PaddingLeft=UDim.new(0,8); RiddlePad.PaddingRight=UDim.new(0,8)
+RiddlePad.Parent=RiddleCard
+local RLL=Instance.new("UIListLayout")
+RLL.FillDirection=Enum.FillDirection.Vertical
+RLL.Padding=UDim.new(0,2)
+RLL.Parent=RiddleCard
+local RTag=Instance.new("TextLabel")
+RTag.Size=UDim2.new(1,0,0,11)
+RTag.BackgroundTransparency=1
+RTag.Text="🧩 QUESTION SOLVER"
+RTag.TextSize=7; RTag.Font=Enum.Font.GothamBold
+RTag.TextColor3=T.Yellow
+RTag.TextXAlignment=Enum.TextXAlignment.Left
+RTag.ZIndex=103; RTag.Parent=RiddleCard
+local RMsg=Instance.new("TextLabel")
+RMsg.Size=UDim2.new(1,0,0,0)
+RMsg.AutomaticSize=Enum.AutomaticSize.Y
+RMsg.BackgroundTransparency=1; RMsg.Text=""
+RMsg.TextSize=10; RMsg.Font=Enum.Font.GothamMedium
+RMsg.TextColor3=T.White; RMsg.TextXAlignment=Enum.TextXAlignment.Left
+RMsg.TextWrapped=true; RMsg.ZIndex=103; RMsg.Parent=RiddleCard
+
+local function setStatus(msg, col)
+    col=col or T.Dim
+    SLbl.Text=msg; SLbl.TextColor3=col; SDot.BackgroundColor3=col
+end
+
+local function flashCode(code, col)
+    col=col or T.Accent
+    CodeVal.Text=code; CodeVal.TextColor3=col
+    Tw(CodeStroke, TweenInfo.new(0.1), {Color=col})
+    task.delay(0.6, function()
+        Tw(CodeStroke, TweenInfo.new(0.5), {Color=T.Border})
+        Tw(CodeVal, TweenInfo.new(0.5), {TextColor3=col})
+    end)
+end
+
+local function showRiddle(msg, col)
+    RMsg.Text=msg; RMsg.TextColor3=col or T.White
+    RiddleCard.Visible=true
+end
+local function hideRiddle()
+    RiddleCard.Visible=false
+end
+
+OnBtn.MouseButton1Click:Connect(function()
+    _enabled=not _enabled
+    if _enabled then
+        OnBtn.Text="ON"; OnBtn.BackgroundColor3=T.Green; OnS.Color=T.Green
+        OnBtn.TextColor3=Color3.fromRGB(8,8,12)
+        setStatus(_focused and "Ready — watching" or "Click the code box first",
+            _focused and T.Green or T.Dim)
+    else
+        OnBtn.Text="OFF"; OnBtn.BackgroundColor3=T.Red; OnS.Color=T.Red
+        OnBtn.TextColor3=T.White; setStatus("Paused",T.Dim)
+    end
+end)
+
+UserInputService.TextBoxFocused:Connect(function(box)
+    _focused=box
+    if _enabled then setStatus("Ready — watching",T.Green) end
+end)
+UserInputService.TextBoxFocusReleased:Connect(function(box)
+    if _focused==box then
+        _focused=nil
+        if _enabled then setStatus("Click the code box first",T.Dim) end
+    end
+end)
+
+local function appendToBox(text)
+    if not text or text=="" then return end
+    if not _focused or not _focused.Parent then
+        setStatus("Click the code box first!",T.Yellow)
+        flashCode(text, T.Yellow)
+        return
+    end
+    local cur=_focused.Text or ""
+    if cur=="" then
+        _focused.Text=text
+    else
+        _focused.Text=cur.." "..text
+    end
+    setStatus("Appended!",T.Green)
+    flashCode(text,T.Green)
+end
+
+-- ============================================================
+-- GAME KNOWLEDGE BASE (Steal a Brainrot)
+-- ============================================================
+local GAME_KB = {
+    -- Launch info
+    launch_date = "May 15-16, 2025",
+    launch_month = "May",
+    launch_year = "2025",
+
+    -- Rarity order (low to high)
+    rarity_order = {"Common","Rare","Epic","Legendary","Mythic","Brainrot God","Secret","OG"},
+    highest_rarity = "OG",
+
+    -- Rarest brainrots by exist count
+    rarest = {
+        {name="Rico Dinero", count="1+"},
+        {name="Lazy Ducky", count="4+"},
+        {name="Spyder Elephant", count="25"},
+        {name="Arcadragon", count="~70"},
+        {name="John Pork", count="~80"},
+    },
+    most_common = "Noobini Pizzanini",
+    most_common_count = "100 million+",
+
+    -- OG examples
+    og_examples = {"Strawberry Elephant","Spyder Elephant"},
+    most_valuable_og = "Strawberry Elephant",
+
+    -- Launch-era / day-one brainrots
+    launch_brainrots = {"Noobini Pizzanini","Tim Cheese","Trippi Troppi","Tung Tung Tung Sahur","Tralalero Tralala"},
+
+    -- First secrets (Update 1, May 31 2025)
+    first_secrets = {"Los Tralaleritos","La Vacca Saturno Saturnita"},
+    first_secrets_update = "Update 1",
+    first_secrets_date = "May 31, 2025",
+
+    -- Update timeline
+    updates = {
+        {date="May 2025",      desc="Game launches. Common/Rare/Epic/Legendary/Mythic/Brainrot God rarities."},
+        {date="May 31, 2025",  desc="Update 1: Secret rarity added. Gold mutation added. Diamond mutation added. Rebirths expanded."},
+        {date="June-July 2025",desc="Bloodmoon mutation. Rainbow mutation. Traits. Candy event. Lucky Blocks."},
+    },
+
+    -- Mutations
+    mutations = {"Gold","Diamond","Bloodmoon","Rainbow"},
+
+    -- Codes knowledge (SAB legacy)
+    sammy_age = "24",
+    sab_release = "MAY2024", -- original SAB game (different from brainrot version)
+}
+
+-- ============================================================
+-- LOCAL QUESTION SOLVER
+-- ============================================================
+local QUESTION_KW = {
+    "when was","how old","what year","what month","birthday","age of",
+    "released","release date","hint","riddle","figure out","guess",
+    "first letter","combine","spell","backwards","months","years",
+    "old is","how many","what is","do you know","can you","which month",
+    "which year","how long","since when","what day","rarest","rarity",
+    "common","rare","epic","legendary","mythic","secret","og","brainrot",
+    "mutation","update","launch","exist","copies","valuable","oldest",
+    "first","when did","who is","what are","how many","tell me",
+}
+
+local function isQuestion(txt)
+    local l=txt:lower()
+    for _,p in ipairs(QUESTION_KW) do if l:find(p,1,true) then return true end end
+    if l:find("%?") then return true end
+    return false
+end
+
+local function solveLocal(txt)
+    local l=txt:lower()
+    local KB=GAME_KB
+
+    -- Rarity questions
+    if l:find("highest rarity") or l:find("rarest rarity") or (l:find("top") and l:find("rarity")) then
+        return "The highest rarity is OG."
+    end
+    if l:find("rarity") and (l:find("order") or l:find("list") or l:find("all")) then
+        return "Rarities (low→high): Common, Rare, Epic, Legendary, Mythic, Brainrot God, Secret, OG."
+    end
+
+    -- Rarest brainrot
+    if (l:find("rarest") or l:find("hardest")) and (l:find("brainrot") or l:find("unit") or l:find("find")) then
+        if l:find("exist") or l:find("cop") then
+            return "Rarest by exist count: Rico Dinero (1+), Lazy Ducky (4+), Spyder Elephant (25), Arcadragon (~70), John Pork (~80)."
+        end
+        return "The rarest rarity is OG. Rarest by copies: Rico Dinero (only 1+ exist)."
+    end
+
+    -- Most common
+    if (l:find("most common") or l:find("easiest")) and l:find("brainrot") then
+        return "The most common Brainrot is Noobini Pizzanini with 100 million+ estimated copies."
+    end
+
+    -- OG brainrots
+    if l:find("og") and (l:find("example") or l:find("which") or l:find("what") or l:find("name")) then
+        return "Famous OG Brainrots include: Strawberry Elephant and Spyder Elephant. Strawberry Elephant is considered the most valuable."
+    end
+
+    -- Most valuable
+    if l:find("most valuable") or (l:find("best") and l:find("og")) then
+        return "Strawberry Elephant is considered the most valuable OG Brainrot."
+    end
+
+    -- Launch / release date
+    if (l:find("launch") or l:find("release") or l:find("start") or l:find("when")) and (l:find("game") or l:find("brainrot") or l:find("steal")) then
+        return "Steal a Brainrot launched on May 15-16, 2025."
+    end
+    if l:find("what year") and (l:find("game") or l:find("brainrot") or l:find("launch")) then
+        return "2025"
+    end
+    if l:find("what month") and (l:find("launch") or l:find("release") or l:find("start")) then
+        return "May"
+    end
+
+    -- First secrets
+    if l:find("first secret") or (l:find("secret") and (l:find("first") or l:find("original") or l:find("og"))) then
+        return "The first Secret Brainrots were Los Tralaleritos and La Vacca Saturno Saturnita, added in Update 1 on May 31, 2025."
+    end
+
+    -- Update 1
+    if l:find("update 1") or (l:find("first update") and l:find("when")) then
+        return "Update 1 released May 31, 2025. It added Secret rarity, Gold mutation, and Diamond mutation."
+    end
+
+    -- Mutations
+    if l:find("mutation") and (l:find("what") or l:find("list") or l:find("all") or l:find("types")) then
+        return "Mutations: Gold, Diamond, Bloodmoon, Rainbow."
+    end
+    if l:find("first mutation") or (l:find("mutation") and l:find("first")) then
+        return "The first mutations were Gold and Diamond, added in Update 1 on May 31, 2025."
+    end
+
+    -- Day-one / launch brainrots
+    if (l:find("launch") or l:find("day.one") or l:find("oldest") or l:find("original")) and l:find("brainrot") then
+        return "Day-one/launch Brainrots: Noobini Pizzanini, Tim Cheese, Trippi Troppi, Tung Tung Tung Sahur, Tralalero Tralala."
+    end
+
+    -- Specific exist counts
+    if l:find("rico dinero") then return "Rico Dinero is extremely rare with only 1+ known copies." end
+    if l:find("lazy ducky") then return "Lazy Ducky has only 4+ known copies, making it one of the rarest." end
+    if l:find("spyder elephant") then return "Spyder Elephant is an OG Brainrot with only ~25 known copies." end
+    if l:find("arcadragon") then return "Arcadragon has approximately 70 known copies." end
+    if l:find("john pork") then return "John Pork has approximately 80 known copies." end
+    if l:find("strawberry elephant") then return "Strawberry Elephant is an OG Brainrot considered one of the most valuable." end
+    if l:find("noobini") then return "Noobini Pizzanini is a day-one launch Brainrot with 100 million+ copies — the most common." end
+
+    -- Lucky blocks / candy / traits
+    if l:find("lucky block") then return "Lucky Blocks were introduced in the June-July 2025 update." end
+    if l:find("candy event") then return "The Candy event ran during the June-July 2025 update period." end
+    if l:find("trait") then return "Traits were introduced in the June-July 2025 update period." end
+    if l:find("bloodmoon") then return "Bloodmoon mutation was added in the June-July 2025 update." end
+    if l:find("rainbow") and l:find("mutation") then return "Rainbow mutation was added in the June-July 2025 update." end
+
+    -- Legacy SAB (old Steal a Brainrot) code hints
+    if (l:find("month") or l:find("when")) and (l:find("sab") or l:find("steal") or l:find("releas")) then
+        return "MAY"
+    end
+    if l:find("year") and (l:find("sab") or l:find("releas")) then return "2024" end
+    if (l:find("age") or l:find("old")) and l:find("sammy") then return "24" end
+    if l:find("may") and l:find("24") then return "MAY24" end
+
+    return nil
+end
+
+local function callAI(prompt)
+    if not ANTHROPIC_KEY or ANTHROPIC_KEY=="" or ANTHROPIC_KEY:find("placeholder") then return nil end
+    local ok,result=pcall(function()
+        local sysPrompt = [[You are an expert on the Roblox game "Steal a Brainrot" (SAB).
+GAME FACTS:
+- Launched May 15-16, 2025
+- Rarities (low to high): Common, Rare, Epic, Legendary, Mythic, Brainrot God, Secret, OG
+- OG is the highest rarity
+- First Secrets (Update 1, May 31 2025): Los Tralaleritos, La Vacca Saturno Saturnita
+- Rarest by copies: Rico Dinero (1+), Lazy Ducky (4+), Spyder Elephant (25), Arcadragon (~70), John Pork (~80)
+- Most common: Noobini Pizzanini (100M+ copies)
+- Famous OGs: Strawberry Elephant (most valuable), Spyder Elephant
+- Day-one units: Noobini Pizzanini, Tim Cheese, Trippi Troppi, Tung Tung Tung Sahur, Tralalero Tralala
+- Mutations: Gold, Diamond (Update 1), Bloodmoon, Rainbow (June-July 2025)
+- Traits, Candy event, Lucky Blocks: June-July 2025
+Answer ONLY the question asked. Be very short and direct (max 1-2 sentences or just the answer). If it's a code riddle, output ONLY the code uppercase.]]
+        local body=HttpService:JSONEncode({
+            model="claude-sonnet-4-6",
+            max_tokens=60,
+            system=sysPrompt,
+            messages={{role="user",content=prompt}}
+        })
+        local resp=HttpService:RequestAsync({
+            Url="https://api.anthropic.com/v1/messages",
+            Method="POST",
+            Headers={
+                ["Content-Type"]="application/json",
+                ["x-api-key"]=ANTHROPIC_KEY,
+                ["anthropic-version"]="2023-06-01",
+            },
+            Body=body,
+        })
+        if resp.StatusCode==200 then
+            local data=HttpService:JSONDecode(resp.Body)
+            if data and data.content and data.content[1] then return data.content[1].text end
+        end
+        return nil
+    end)
+    if ok and result then
+        local trimmed=tostring(result):match("^%s*(.-)%s*$")
+        return trimmed~="" and trimmed or nil
+    end
+    return nil
+end
+
+-- ============================================================
+-- HUD NOISE FILTER (FIXED)
+-- Catches timers like 52s, 53s, 54s and other HUD garbage
+-- ============================================================
+local HUD_NOISE_PAT = {
+    "^%d+m%s*%d+s$",       -- "15m 18s"
+    "^%d+s$",               -- "52s", "53s", "54s"  ← main fix
+    "^%d+m$",               -- "3m"
+    "^%d+h$",               -- "2h"
+    "^%d+h%s*%d+m$",        -- "1h 30m"
+    "^%d+:%d+$",            -- "1:30"
+    "^%d+:%d+:%d+$",        -- "1:30:00"
+    "^%d+x%s*time",         -- "30x time"
+    "^%d+x$",               -- "30x"
+    "^x%d+$",               -- "x30"
+    "^%d+$",                -- pure numbers
+    "%$%d",                 -- "$42.5M/s"
+    "m%/s",                 -- per-second stat
+    "^%d+%.%d+[bBmMkK]",   -- "42.5M"
+    "^%+%d+",               -- "+500"
+    "^%-%d+",               -- "-10"
+    "^%d+%%%s*$",           -- "75%"
+}
+
+local HUD_NOISE_WORDS = {
+    "time","score","level","wave","stage","round","kills","coins","gems",
+    "cash","exp","xp","speed","health","hp","mp","energy","target",
+    "current","average","network","people","sent","rebirth","prestige",
+    "timer","countdown","elapsed","remaining","seconds","minutes",
+}
+
+local function isHudNoise(txt)
+    local l = txt:lower():match("^%s*(.-)%s*$")
+    if #l == 0 then return true end
+
+    -- Anchored pattern check
+    for _, pat in ipairs(HUD_NOISE_PAT) do
+        if l:find(pat) then return true end
+    end
+
+    -- Short text (≤3 words) with known HUD words
+    local wordCount = 0
+    for _ in l:gmatch("%S+") do wordCount = wordCount + 1 end
+    if wordCount <= 3 then
+        for _, nw in ipairs(HUD_NOISE_WORDS) do
+            if l:find(nw, 1, true) then return true end
+        end
+    end
+
+    -- Catch anything that is purely a number + single time/size unit letter
+    -- Handles edge cases like "52s" with trailing space, "3M", "10K", etc.
+    if l:match("^%d+[smhSMH]%.?$") then return true end
+    if l:match("^%d+[kKmMbBgGxX]$") then return true end
+
+    -- "30x time", "15m 18s" combo patterns
+    if l:match("%d+x%s+%a") or l:match("%d+m%s*%d+s") then return true end
+
+    return false
+end
+
+-- ============================================================
+-- CODE EXTRACTOR (FIXED)
+-- Now requires at least 3 letters to avoid "52S", "X12" etc.
+-- ============================================================
+local function extractCode(txt)
+    if isHudNoise(txt) then return nil end
+    local codes = {}
+    for w in txt:gmatch("%S+") do
+        local clean = w:gsub("[^A-Za-z0-9_%-]", "")
+        if #clean >= 4 then
+            local letterCount = #(clean:gsub("[^A-Za-z]", ""))
+            -- Must be ALL CAPS and have at least 3 real letters
+            -- (raised from 2 — stops "52S", "X12", "30XP" slipping through)
+            if clean == clean:upper() and letterCount >= 3 then
+                -- Skip tokens that are just a number + 1-2 capital letters (unit abbreviations)
+                if not clean:match("^%d+[A-Z]$") and not clean:match("^%d+[A-Z][A-Z]$")
+                and not clean:match("^[A-Z]%d+$") and not clean:match("^[A-Z][A-Z]%d+$") then
+                    table.insert(codes, clean)
+                end
+            end
+        end
+    end
+    if #codes > 0 then return table.concat(codes, " ") end
+    return nil
+end
+
+-- Legacy word extractor kept for fallback
+local function extractWords(txt)
+    local words={}
+    for w in txt:gmatch("%S+") do
+        local clean=w:gsub("[^A-Za-z0-9]","")
+        if #clean>=2 then
+            local isUpper=clean==clean:upper() and clean:match("[A-Z]")
+            local isLower=clean==clean:lower() and clean:match("[a-z]") and #clean>=3
+            if isUpper or isLower then
+                table.insert(words,clean)
+            end
+        end
+    end
+    if #words>0 then return table.concat(words," ") end
+    return nil
+end
+
+-- ============================================================
+-- TOP-SCREEN DETECTION
+-- Returns true if the GuiObject is positioned in the top 20% of the screen
+-- ============================================================
+local function isAtTopOfScreen(obj)
+    if not obj or not obj:IsA("GuiObject") then return false end
+    local ok, pos = pcall(function()
+        return obj.AbsolutePosition
+    end)
+    if not ok then return false end
+    local screenHeight = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 768
+    local objY = pos.Y
+    -- Top 20% threshold
+    return objY < (screenHeight * TOP_SCREEN_THRESHOLD)
+end
+
+-- ============================================================
+-- PROCESS GLOBAL TEXT
+-- ============================================================
+local function processGlobal(txt, fromTopScreen)
+    if not _enabled then return end
+    if not txt or type(txt)~="string" or #txt<2 then return end
+    if not fromTopScreen then return end
+
+    -- Skip HUD noise (timers, multipliers, stat displays)
+    if isHudNoise(txt) then return end
+
+    if _seen[txt] then return end
+    _seen[txt]=true
+    task.delay(20, function() _seen[txt]=nil end)
+
+    -- Always try to grab an inline code even from question text
+    local inlineCode = extractCode(txt)
+    if inlineCode and not isQuestion(txt) == false then
+        -- If there's a standalone all-caps code in the text, flash it
+        flashCode(inlineCode, T.Accent)
+    end
+
+    if isQuestion(txt) then
+        showRiddle("Thinking...", T.Yellow)
+        setStatus("Question detected...", T.Yellow)
+
+        -- Try local knowledge first
+        local ans = solveLocal(txt)
+        if ans then
+            showRiddle("Answer: "..ans, T.Green)
+            setStatus("Answered!", T.Green)
+            flashCode(ans, T.Green)
+            appendToBox(ans)
+            task.delay(5, hideRiddle)
+            return
+        end
+
+        -- Fall back to AI
+        showRiddle("Asking AI...", T.Yellow)
+        task.spawn(function()
+            local ai = callAI(txt)
+            if ai then
+                showRiddle("AI: "..ai, T.Green)
+                setStatus("AI answered!", T.Green)
+                flashCode(ai, T.Green)
+                appendToBox(ai)
+                task.delay(5, hideRiddle)
+            else
+                showRiddle("Could not answer", T.Red)
+                setStatus("No answer found", T.Red)
+                task.delay(3, function()
+                    hideRiddle()
+                    setStatus(_focused and "Ready — watching" or "Click the code box first",
+                        _focused and T.Green or T.Dim)
+                end)
+            end
+        end)
+        return
+    end
+
+    -- Not a question: only paste confirmed all-caps promo codes, nothing else
+    local code = extractCode(txt)
+    if code then
+        appendToBox(code)
+        flashCode(code, T.Accent)
+        setStatus("Code detected!", T.Accent)
+    end
+end
+
+-- ============================================================
+-- BLACKLIST: GUI names that belong to the codes menu / input UI
+-- ============================================================
+local UI_BLACKLIST = {
+    "codebox","codeinput","codeentry","textbox","input","submit",
+    "redeem","codes","dlc","codemenu","codesframe","codesui",
+}
+local function isBlacklistedUI(obj)
+    if obj:IsA("TextBox") then return true end
+    local name  = (obj.Name or ""):lower()
+    local pname = (obj.Parent and obj.Parent.Name or ""):lower()
+    local gpname= (obj.Parent and obj.Parent.Parent and obj.Parent.Parent.Name or ""):lower()
+    for _, b in ipairs(UI_BLACKLIST) do
+        if name:find(b,1,true) or pname:find(b,1,true) or gpname:find(b,1,true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- WATCH LABEL — only if at top of screen and not blacklisted
+-- ============================================================
+local _watched = {}
+local function watchLabel(obj)
+    if _watched[obj] then return end
+    if isBlacklistedUI(obj) then return end
+    _watched[obj] = true
+    obj:GetPropertyChangedSignal("Text"):Connect(function()
+        if obj == _focused then return end
+        if isAtTopOfScreen(obj) and not isBlacklistedUI(obj) then
+            processGlobal(obj.Text, true)
+        end
+    end)
+end
+
+-- ============================================================
+-- SCAN NEW GUI DESCENDANTS
+-- Only register TextLabels that appear at the top of screen
+-- ============================================================
+playerGui.DescendantAdded:Connect(function(obj)
+    task.wait(0.08)
+    if obj:IsA("TextBox") then return end
+    if not obj:IsA("TextLabel") then return end
+    if isBlacklistedUI(obj) then return end
+    if not isAtTopOfScreen(obj) then return end
+
+    local txt = obj.Text or ""
+    watchLabel(obj)
+    if #txt > 1 then
+        processGlobal(txt, true)
+    end
+
+    obj:GetPropertyChangedSignal("Text"):Connect(function()
+        if obj == _focused then return end
+        if isAtTopOfScreen(obj) and not isBlacklistedUI(obj) then
+            if not _watched[obj] then watchLabel(obj) end
+            processGlobal(obj.Text, true)
+        end
+    end)
+end)
+
+-- ============================================================
+-- SCAN EXISTING LABELS ON LOAD (top-screen only)
+-- ============================================================
+task.spawn(function()
+    task.wait(1)
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and not isBlacklistedUI(obj) and isAtTopOfScreen(obj) then
+            local txt = obj.Text or ""
+            if #txt > 1 then
+                watchLabel(obj)
+                processGlobal(txt, true)
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- REPLICATEDSTORAGE FLAGS (codes)
+-- ============================================================
+pcall(function()
+    local shared=ReplicatedStorage:WaitForChild("Shared",5)
+    if not shared then return end
+    local flags=shared:WaitForChild("Flags",5); if not flags then return end
+    local cf=flags:WaitForChild("CodesFlags",5); if not cf then return end
+    cf.ChildAdded:Connect(function(obj)
+        local n = obj.Name or ""
+        if n:match("^[A-Z0-9_%-]+$") and #n>=3 then
+            appendToBox(n)
+            flashCode(n, T.Accent)
+        end
+        if obj:IsA("StringValue") then
+            local v=tostring(obj.Value)
+            if v:match("^[A-Z0-9_%-]+$") and #v>=3 then
+                appendToBox(v)
+            end
+            obj:GetPropertyChangedSignal("Value"):Connect(function()
+                local vv=tostring(obj.Value)
+                if vv:match("^[A-Z0-9_%-]+$") and #vv>=3 then
+                    appendToBox(vv)
+                end
+            end)
+        end
+    end)
+end)
+
+setStatus("Click the code box first", T.Dim)
+flashCode("—", T.Dim)
