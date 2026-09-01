@@ -1,0 +1,116 @@
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+
+local function buildPriorityMap()
+	local priList = _G.SHARED_PRIORITY_ITEMS or {}
+	local map = {}
+	for rank, name in ipairs(priList) do
+		if type(name) == "string" and name ~= "" then
+			map[string.lower(name)] = rank
+		end
+	end
+	return map
+end
+
+local function buildBlacklistSet()
+	local blList = _G.SHARED_BLACKLIST_ITEMS or {}
+	local set = {}
+	for _, name in ipairs(blList) do
+		if type(name) == "string" and name ~= "" then
+			set[string.lower(name)] = true
+		end
+	end
+	return set
+end
+
+function _G.Sabcom_GetSortedTargets()
+	local char = LP.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local myPos = hrp and hrp.Position or Vector3.zero
+
+	local priMap = buildPriorityMap()
+	local blSet = buildBlacklistSet()
+	local mode = _G.SabcomStealMode or "priority"
+	local minGen = tonumber(_G.SabcomMinGen) or 0
+
+	local targets = {}
+	local plots = workspace:FindFirstChild("Plots")
+	if not plots then return targets end
+
+	for _, plot in ipairs(plots:GetChildren()) do
+		local ch = type(_G.sabcomGetPlotChannel) == "function" and _G.sabcomGetPlotChannel(plot)
+		local owner = ch and type(_G.sabcomChannelGet) == "function" and _G.sabcomChannelGet(ch, "Owner")
+		if owner and tostring(owner) == tostring(LP.UserId) then
+			continue
+		end
+
+		local animalList = ch and type(_G.sabcomChannelGet) == "function" and _G.sabcomChannelGet(ch, "AnimalList")
+		if type(animalList) == "table" then
+			for slotIdx, animData in pairs(animalList) do
+				if type(animData) == "table" then
+					local rawName = animData.Name or animData.Index or "Unknown"
+					local cleanName = string.lower(tostring(rawName))
+
+					if blSet[cleanName] then
+						continue
+					end
+
+					local gen = 0
+					if type(_G.SabcomGen) == "function" then
+						gen = _G.SabcomGen(animData.Index or animData.Name, animData.Mutation, animData.Traits)
+					end
+					if gen < minGen then
+						continue
+					end
+
+					local targetPos = nil
+					local animModel = plot:FindFirstChild("Animals") and plot.Animals:FindFirstChild(tostring(slotIdx))
+					if animModel then
+						targetPos = animModel:GetPivot().Position
+					else
+						targetPos = plot:GetPivot().Position
+					end
+
+					local priRank = priMap[cleanName] or 999999
+
+					table.insert(targets, {
+						Plot = plot,
+						Slot = slotIdx,
+						Data = animData,
+						Name = cleanName,
+						Priority = priRank,
+						Gen = gen,
+						Position = targetPos,
+						Distance = (targetPos - myPos).Magnitude
+					})
+				end
+			end
+		end
+	end
+
+	table.sort(targets, function(a, b)
+		if mode == "priority" then
+			if a.Priority ~= b.Priority then
+				return a.Priority < b.Priority
+			end
+			if a.Gen ~= b.Gen then
+				return a.Gen > b.Gen
+			end
+			return a.Distance < b.Distance
+		elseif mode == "nearest" then
+			return a.Distance < b.Distance
+		else
+			if a.Priority ~= b.Priority then
+				return a.Priority < b.Priority
+			end
+			return a.Distance < b.Distance
+		end
+	end)
+
+	return targets
+end
+
+function _G.Sabcom_GetBestTarget()
+	local list = _G.Sabcom_GetSortedTargets()
+	return list[1]
+end
