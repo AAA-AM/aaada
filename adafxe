@@ -1,0 +1,147 @@
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Global Configuration Table
+_G.SabcomStealMode = "priority"
+_G.SabcomTPMode = "priority"
+
+_G.SHARED_PRIORITY_ITEMS = {
+	"Demon",
+	"Vampire",
+	"Skeleton",
+	"Ghost",
+	"Pumpkin"
+}
+
+_G.SHARED_PRIORITY_INDEX = {}
+local function rebuildPriorityIndex()
+	table.clear(_G.SHARED_PRIORITY_INDEX)
+	for idx, val in ipairs(_G.SHARED_PRIORITY_ITEMS or {}) do
+		if type(val) == "string" and val ~= "" then
+			_G.SHARED_PRIORITY_INDEX[string.lower(val)] = idx
+		end
+	end
+end
+rebuildPriorityIndex()
+
+local function getPriorityIndex(name)
+	if type(name) ~= "string" or name == "" then
+		return math.huge
+	end
+
+	local lowerName = string.lower(name)
+
+	if _G.SHARED_PRIORITY_INDEX[lowerName] then
+		return _G.SHARED_PRIORITY_INDEX[lowerName]
+	end
+
+	for key, idx in pairs(_G.SHARED_PRIORITY_INDEX) do
+		if lowerName:find(key, 1, true) then
+			return idx
+		end
+	end
+
+	return math.huge
+end
+
+-- Configuration File Path
+local filename = "SABCOM_Config.json"
+
+local function getPriorityListText()
+	if type(_G.SHARED_PRIORITY_ITEMS) == "table" then
+		return table.concat(_G.SHARED_PRIORITY_ITEMS, "\n")
+	end
+	return ""
+end
+
+local function applyPriorityListText(text)
+	local items = {}
+	if type(text) == "string" then
+		for line in text:gmatch("[^\r\n]+") do
+			local trimmed = line:match("^%s*(.-)%s*$")
+			if trimmed ~= "" then
+				table.insert(items, trimmed)
+			end
+		end
+	end
+	_G.SHARED_PRIORITY_ITEMS = items
+	rebuildPriorityIndex()
+end
+
+local function loadConfig()
+	if readfile and isfile and isfile(filename) then
+		local status, result = pcall(function()
+			return HttpService:JSONDecode(readfile(filename))
+		end)
+		if status and type(result) == "table" then
+			if type(result.priorityListText) == "string" then
+				applyPriorityListText(result.priorityListText)
+			elseif type(result.priorityList) == "table" then
+				_G.SHARED_PRIORITY_ITEMS = result.priorityList
+				rebuildPriorityIndex()
+			end
+		end
+	end
+
+	-- 設定値の強制適用（常に "priority" モード）
+	_G.SabcomStealMode = "priority"
+	_G.SabcomTPMode = "priority"
+end
+
+local function saveConfig()
+	if writefile then
+		local data = {
+			stealMode = "priority",
+			tpMode = "priority",
+			priorityListText = getPriorityListText(),
+			priorityList = _G.SHARED_PRIORITY_ITEMS
+		}
+		pcall(function()
+			writefile(filename, HttpService:JSONEncode(data))
+		end)
+	end
+end
+
+-- 初回設定の読み込み
+loadConfig()
+
+-- ターゲット取得関数（優先度最優先）
+local function getPriorityTarget(animalsList)
+	local bestTarget = nil
+	local bestPriorityIndex = math.huge
+
+	for _, item in ipairs(animalsList or {}) do
+		if item and item.Name then
+			local prioIdx = getPriorityIndex(item.Name)
+			if prioIdx < bestPriorityIndex then
+				bestPriorityIndex = prioIdx
+				bestTarget = item
+			end
+		end
+	end
+
+	return bestTarget
+end
+
+-- メインTP処理関数
+function _G.Sabcom_Step(animalsList)
+	local target = getPriorityTarget(animalsList)
+
+	if target and target:FindFirstChild("HumanoidRootPart") then
+		local char = LocalPlayer.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			-- 優先度の高いターゲットの場所へ転送
+			char.HumanoidRootPart.CFrame = target.HumanoidRootPart.CFrame
+		end
+	end
+end
+
+-- 自動保存ロジック（終了時）
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	if player == LocalPlayer then
+		saveConfig()
+	end
+end)
